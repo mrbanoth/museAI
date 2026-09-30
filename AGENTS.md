@@ -9,7 +9,7 @@ This is an Expo/React Native application for **Muse AI** (and AI companion **Coo
 - **App Name:** Muse AI Clone
 - **Core Concept:** Autonomous AI Agent & Chat Companion for Recurring Tasks, Goals, and Automated Workflows
 - **Platform:** iOS, Android, and Web (Universal React Native)
-- **Current Phase:** Full UI Implementation with Pixel-Perfect Chat, Header Mascot, Floating Dock Tabs, Sidebar Drawer, and Settings.
+- **Current Phase:** Full UI Implementation with Clean Expo Router Tab Architecture, Pixel-Perfect Chat, Header Mascot, Floating Dock Tabs, Sidebar Drawer, and Settings.
 
 ---
 
@@ -42,7 +42,7 @@ Always reference and add color definitions in `src/constants/colors.ts`. Never h
 
 ---
 
-## 📁 Directory Structure & Architecture
+## 📁 Clean Directory Structure & Architecture
 
 ```
 muse_ai_clone/
@@ -52,46 +52,25 @@ muse_ai_clone/
 │   └── images/
 │       └── cooper_mascot.jpg  # 3D character mascot avatar portrait
 ├── src/
-│   ├── app/                   # Expo Router screens
+│   ├── app/                   # Expo Router file-based screens
 │   │   ├── _layout.tsx        # Root Stack navigator & ThemeProvider
-│   │   ├── index.tsx          # Initial entry point (SignInScreen)
-│   │   └── home.tsx           # Home screen route (HomeScreen)
-│   ├── components/            # Modular, reusable UI components
-│   │   ├── auth/              # Authentication components
-│   │   │   ├── GoogleIcon.tsx
-│   │   │   ├── MuseLogo.tsx
-│   │   │   ├── GoogleSignInButton.tsx
-│   │   │   └── index.ts
-│   │   ├── common/            # Shared layout components
-│   │   │   ├── AppHeader.tsx          # 2-line menu + Blue dot, 3D Mascot + Name Capsule, 3-dots
-│   │   │   ├── MascotAvatar.tsx       # 3D Cooper Mascot / customizable avatar
-│   │   │   ├── TabNavigationBar.tsx   # Floating stadium dock (Chat, Feed, Ideas, Task, Apps)
-│   │   │   ├── SidebarDrawer.tsx      # Slide-in session history (Main chat, Side chats, Search, Settings)
-│   │   │   ├── SettingsMenuModal.tsx  # 3-dots action sheet (Edit Avatar, Rename, Delete Chat)
-│   │   │   ├── EditAgentModal.tsx     # Custom mascot/name editor with live preview
-│   │   │   └── index.ts
-│   │   ├── chat/              # Chat components
-│   │   │   ├── ChatBubble.tsx         # Peach user bubble & gray agent bubble
-│   │   │   ├── ChatMessageList.tsx    # Scrollable history with centered date header
-│   │   │   ├── ChatInputBar.tsx       # Floating pill (+, Message placeholder, Mic)
-│   │   │   ├── TypingIndicator.tsx    # Animated pulse thinking dots
-│   │   │   └── index.ts
-│   │   └── tabs/              # Additional Tab Views
-│   │       ├── FeedTab.tsx            # Clean empty Feed tab view
-│   │       ├── IdeasTab.tsx           # Clean minimal Ideas view
-│   │       ├── TasksTab.tsx           # Scheduled goals & recurring tasks
-│   │       ├── SettingsTab.tsx        # Comprehensive Settings & Connectors view
-│   │       └── index.ts
-│   ├── screens/
-│   │   ├── HomeScreen.tsx     # Composed Home screen with tab state and modals
-│   │   └── SignInScreen.tsx   # Google Sign-in screen
+│   │   ├── index.tsx          # Google Sign-in onboarding screen (Self-contained)
+│   │   ├── home.tsx           # Compatibility redirect to /(tabs)/chat
+│   │   └── (tabs)/            # Dedicated 5-Tab Routing & Layout
+│   │       ├── _layout.tsx    # Master Tab Layout (AppHeader + Native Tabs + Modals)
+│   │       ├── index.tsx      # Tab index redirect to /chat
+│   │       ├── chat.tsx       # 1. Chat Tab: Messages list, peach/gray bubbles, input pill
+│   │       ├── feed.tsx       # 2. Feed Tab: Minimalist autonomous intelligence feed
+│   │       ├── ideas.tsx      # 3. Ideas Tab: 1-tap pre-built automation templates
+│   │       ├── tasks.tsx      # 4. Tasks Tab: Scheduled goals & recurring routine manager
+│   │       └── settings.tsx   # 5. Settings Tab: Quota card, groups, and integrated sheets
+│   ├── components/            # Core Shared UI Layout Components
+│   │   └── common/            # Header, Mascot, Drawer, Customizer & Settings Modals
 │   └── constants/
 │       ├── colors.ts          # Central color palette
 │       ├── dummyData.ts       # Initial chat & sample workflows
 │       └── theme.ts           # Spacing and typography
 ```
-
-For the exhaustive file-by-file guide, see [`CODEBASE_EXPLANATION.md`](file:///Users/rahulsanarahulp/Documents/Projects/React%20Native/muse_ai_clone/CODEBASE_EXPLANATION.md).
 
 ---
 

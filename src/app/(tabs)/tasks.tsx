@@ -1,11 +1,9 @@
 /**
- * TasksTab Component
+ * Tasks Tab Screen ('/(tabs)/tasks')
  *
- * Autonomous Agent Scheduler & Goal Manager:
- * - Header: Page title and "+ New" goal creation trigger
- * - Goals List: Scheduled routines (Morning Check-in, Evening Reflection, Sprint Review)
- * - Metadata: Schedule frequency (e.g. Every day @ 8:00 AM) and lifetime run counts
- * - Controls: Active/Paused toggle switch and manual instantaneous "Run" trigger with feedback
+ * Minimalist Autonomous Agent Scheduler & Goal Manager:
+ * - Simple, clean UI displaying scheduled routines and goals
+ * - On-click triggers simple Toast notifications
  */
 
 import React, { useState } from 'react';
@@ -16,7 +14,6 @@ import {
   ScrollView,
   TouchableOpacity,
   Switch,
-  ActivityIndicator,
 } from 'react-native';
 import { HugeiconsIcon } from '@hugeicons/react-native';
 import {
@@ -24,68 +21,20 @@ import {
   Target01Icon,
   Clock01Icon,
   PlayIcon,
-  CheckmarkCircle02Icon,
 } from '@hugeicons/core-free-icons';
 import { Colors } from '@/constants/colors';
-import { TASK_GOALS, TaskGoalItem } from '@/constants/dummyData';
+import { TASK_GOALS } from '@/constants/dummyData';
+import { TaskGoalItem } from '@/types';
+import { showToast } from '@/context/ToastContext';
 
-export interface TasksTabProps {
-  /** Callback fired when "+ New" goal button is pressed */
-  onNewGoal?: () => void;
-  /** Callback fired when manual run is triggered for a task */
-  onRunTask?: (task: TaskGoalItem) => void;
-}
-
-/**
- * Scheduled Agents & Autonomous Goals Tab View
- */
-export const TasksTab: React.FC<TasksTabProps> = ({ onNewGoal, onRunTask }) => {
+export default function TasksScreen() {
   const [tasks, setTasks] = useState<TaskGoalItem[]>(TASK_GOALS);
-  const [runningTaskId, setRunningTaskId] = useState<string | null>(null);
-  const [recentlyRunTaskId, setRecentlyRunTaskId] = useState<string | null>(null);
 
-
-  const toggleTaskStatus = (id: string) => {
+  const handleToggle = (id: string, title: string) => {
     setTasks((prev) =>
-      prev.map((t) => {
-        if (t.id === id) {
-          return {
-            ...t,
-            status: t.status === 'active' ? 'paused' : 'active',
-          };
-        }
-        return t;
-      })
+      prev.map((t) => (t.id === id ? { ...t, status: t.status === 'active' ? 'paused' : 'active' } : t))
     );
-  };
-
-  const handleRunManual = (task: TaskGoalItem) => {
-    if (runningTaskId) return;
-    setRunningTaskId(task.id);
-    setRecentlyRunTaskId(null);
-
-    // Simulate manual agent execution with responsive feedback
-    setTimeout(() => {
-      setTasks((prev) =>
-        prev.map((t) => {
-          if (t.id === task.id) {
-            return {
-              ...t,
-              runsCount: t.runsCount + 1,
-            };
-          }
-          return t;
-        })
-      );
-      setRunningTaskId(null);
-      setRecentlyRunTaskId(task.id);
-
-      setTimeout(() => {
-        setRecentlyRunTaskId(null);
-      }, 3500);
-    }, 1000);
-
-    onRunTask?.(task);
+    showToast(`${title} status updated`);
   };
 
   return (
@@ -94,28 +43,29 @@ export const TasksTab: React.FC<TasksTabProps> = ({ onNewGoal, onRunTask }) => {
         style={styles.scrollArea}
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}>
-        {/* Large Page Title (no subtitle, matching existing design) */}
+        {/* Page Title & "+ New" Button */}
         <View style={styles.headerRow}>
           <Text style={styles.pageTitle}>Scheduled Agents & Goals</Text>
           <TouchableOpacity
             style={styles.newGoalBtn}
-            onPress={onNewGoal}
+            onPress={() => showToast('Create New Goal')}
             activeOpacity={0.8}>
             <HugeiconsIcon icon={Add01Icon} size={15} color={Colors.white} strokeWidth={2.4} />
             <Text style={styles.newGoalText}>New</Text>
           </TouchableOpacity>
         </View>
 
-        {/* List of Tasks / Goals (matching existing list row style) */}
+        {/* Task Rows */}
         {tasks.map((task, index) => {
           const isActive = task.status === 'active';
-          const isRunning = runningTaskId === task.id;
-          const isRecentlyCompleted = recentlyRunTaskId === task.id;
 
           return (
             <View key={task.id}>
-              <View style={styles.taskRow}>
-                {/* Left Icon Badge */}
+              <TouchableOpacity
+                style={styles.taskRow}
+                onPress={() => showToast(task.title)}
+                activeOpacity={0.75}>
+                {/* Left Target Icon Badge */}
                 <View
                   style={[
                     styles.iconContainer,
@@ -129,13 +79,12 @@ export const TasksTab: React.FC<TasksTabProps> = ({ onNewGoal, onRunTask }) => {
                   />
                 </View>
 
-                {/* Center Content Block */}
+                {/* Center Content */}
                 <View style={styles.textContainer}>
                   <Text style={[styles.taskTitle, !isActive && styles.pausedText]}>
                     {task.title}
                   </Text>
 
-                  {/* Schedule info (shown once) & Executions */}
                   <View style={styles.metaRow}>
                     <View style={styles.scheduleItem}>
                       <HugeiconsIcon icon={Clock01Icon} size={12} color={Colors.textMuted} />
@@ -144,59 +93,32 @@ export const TasksTab: React.FC<TasksTabProps> = ({ onNewGoal, onRunTask }) => {
                     <Text style={styles.metaDot}>•</Text>
                     <Text style={styles.executionsText}>{task.runsCount} runs</Text>
                   </View>
-
-                  {/* Execution feedback badge */}
-                  {isRecentlyCompleted && (
-                    <View style={styles.successBadge}>
-                      <HugeiconsIcon
-                        icon={CheckmarkCircle02Icon}
-                        size={12}
-                        color={Colors.success}
-                        strokeWidth={2.2}
-                      />
-                      <Text style={styles.successBadgeText}>Executed just now</Text>
-                    </View>
-                  )}
                 </View>
 
-                {/* Right Action Controls: Run Button & Status Toggle */}
+                {/* Right Controls: Switch & Run Button */}
                 <View style={styles.actionsCol}>
                   <Switch
                     value={isActive}
-                    onValueChange={() => toggleTaskStatus(task.id)}
+                    onValueChange={() => handleToggle(task.id, task.title)}
                     trackColor={{ false: Colors.border, true: Colors.primaryLight }}
                     thumbColor={isActive ? Colors.primary : Colors.surfaceMuted}
                   />
 
                   <TouchableOpacity
-                    style={[
-                      styles.runManualBtn,
-                      isRunning && styles.runManualBtnActive,
-                    ]}
-                    onPress={() => handleRunManual(task)}
-                    disabled={isRunning}
+                    style={styles.runManualBtn}
+                    onPress={() => showToast(`Running ${task.title}`)}
                     activeOpacity={0.75}>
-                    {isRunning ? (
-                      <>
-                        <ActivityIndicator size="small" color={Colors.primary} />
-                        <Text style={styles.runManualText}>Running</Text>
-                      </>
-                    ) : (
-                      <>
-                        <HugeiconsIcon
-                          icon={PlayIcon}
-                          size={12}
-                          color={Colors.primary}
-                          strokeWidth={2.4}
-                        />
-                        <Text style={styles.runManualText}>Run</Text>
-                      </>
-                    )}
+                    <HugeiconsIcon
+                      icon={PlayIcon}
+                      size={12}
+                      color={Colors.primary}
+                      strokeWidth={2.4}
+                    />
+                    <Text style={styles.runManualText}>Run</Text>
                   </TouchableOpacity>
                 </View>
-              </View>
+              </TouchableOpacity>
 
-              {/* Subtle Row Divider */}
               {index < tasks.length - 1 && <View style={styles.divider} />}
             </View>
           );
@@ -204,7 +126,7 @@ export const TasksTab: React.FC<TasksTabProps> = ({ onNewGoal, onRunTask }) => {
       </ScrollView>
     </View>
   );
-};
+}
 
 const styles = StyleSheet.create({
   container: {
@@ -301,22 +223,6 @@ const styles = StyleSheet.create({
     color: '#707070',
     fontWeight: '500',
   },
-  successBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    alignSelf: 'flex-start',
-    backgroundColor: Colors.successLight,
-    paddingHorizontal: 7,
-    paddingVertical: 3,
-    borderRadius: 6,
-    gap: 4,
-    marginTop: 6,
-  },
-  successBadgeText: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: Colors.success,
-  },
   actionsCol: {
     alignItems: 'flex-end',
     gap: 8,
@@ -332,9 +238,6 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     gap: 4,
   },
-  runManualBtnActive: {
-    opacity: 0.8,
-  },
   runManualText: {
     fontSize: 12,
     fontWeight: '700',
@@ -346,5 +249,3 @@ const styles = StyleSheet.create({
     marginHorizontal: 20,
   },
 });
-
-export default TasksTab;

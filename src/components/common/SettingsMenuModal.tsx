@@ -30,6 +30,7 @@ import {
   RefreshIcon,
 } from '@hugeicons/core-free-icons';
 import { Colors } from '@/constants/colors';
+import { showToast } from '@/context/ToastContext';
 
 export interface SettingsMenuModalProps {
   /** Visibility state of the dropdown overlay */
@@ -62,7 +63,6 @@ export const SettingsMenuModal: React.FC<SettingsMenuModalProps> = ({
 }) => {
   const insets = useSafeAreaInsets();
 
-
   return (
     <Modal
       visible={visible}
@@ -81,6 +81,7 @@ export const SettingsMenuModal: React.FC<SettingsMenuModalProps> = ({
               <TouchableOpacity
                 style={styles.menuItem}
                 onPress={() => {
+                  showToast('Edit Mascot & Avatar');
                   onClose();
                   onEditAvatar();
                 }}
@@ -98,6 +99,7 @@ export const SettingsMenuModal: React.FC<SettingsMenuModalProps> = ({
               <TouchableOpacity
                 style={styles.menuItem}
                 onPress={() => {
+                  showToast('Rename Agent');
                   onClose();
                   onRename();
                 }}
@@ -115,6 +117,7 @@ export const SettingsMenuModal: React.FC<SettingsMenuModalProps> = ({
               <TouchableOpacity
                 style={styles.menuItem}
                 onPress={() => {
+                  showToast('Export Chat');
                   onClose();
                   onShareChat?.();
                 }}
@@ -132,6 +135,7 @@ export const SettingsMenuModal: React.FC<SettingsMenuModalProps> = ({
               <TouchableOpacity
                 style={styles.menuItem}
                 onPress={() => {
+                  showToast('Clear Messages');
                   onClose();
                   onClearChat();
                 }}
@@ -151,6 +155,7 @@ export const SettingsMenuModal: React.FC<SettingsMenuModalProps> = ({
               <TouchableOpacity
                 style={[styles.menuItem, styles.dangerItem]}
                 onPress={() => {
+                  showToast('Delete Chat');
                   onClose();
                   onDeleteChat();
                 }}

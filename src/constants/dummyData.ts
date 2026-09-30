@@ -1,7 +1,7 @@
 /**
- * Muse AI Clone - Mock Data Models & Datasets
+ * Muse AI Clone - Mock Data Datasets
  *
- * Centralized data contracts and initial state mocks for:
+ * Centralized initial state mocks for:
  * 1. Chat conversation messages & Cooper AI responses
  * 2. Sidebar drawer chat sessions & side topics
  * 3. Pre-built prompt idea templates for one-tap agent execution
@@ -9,83 +9,17 @@
  * 5. Account plan limits and third-party workspace connectors
  */
 
-/**
- * Message object representing a chat utterance in the conversation history.
- */
-export interface ChatMessage {
-  /** Unique identifier for the message */
-  id: string;
-  /** Origin of the message: 'user' for current user, 'agent' for Cooper AI */
-  sender: 'user' | 'agent' | 'system';
-  /** Plaintext or markdown formatted message content */
-  text: string;
-  /** Formatted timestamp display string (e.g. "3:35 PM") */
-  timestamp: string;
-}
+import {
+  ChatMessage,
+  SideChatItem,
+  IdeaItem,
+  TaskGoalItem,
+  ConnectorItem,
+  PlanData,
+} from '@/types';
 
-/**
- * Chat topic item listed under "Side chats" in the sliding sidebar drawer.
- */
-export interface SideChatItem {
-  /** Unique identifier for the side chat thread */
-  id: string;
-  /** Title or subject of the side chat */
-  title: string;
-  /** Indicates whether unread updates exist in this side thread */
-  hasUnreadDot?: boolean;
-}
-
-/**
- * Inspiration card template for the Ideas tab.
- */
-export interface IdeaItem {
-  /** Unique idea identifier */
-  id: string;
-  /** 3D emoji or icon representing the domain */
-  icon: string;
-  /** Prominent bold action title */
-  title: string;
-  /** Descriptive preview of what Cooper will build or research */
-  description: string;
-  /** Full prompt automatically loaded into chat input upon selection */
-  prompt: string;
-}
-
-/**
- * Scheduled goal or recurring autonomous workflow tracked in Tasks tab.
- */
-export interface TaskGoalItem {
-  /** Unique task identifier */
-  id: string;
-  /** Name of the goal or routine check */
-  title: string;
-  /** Frequency and time specification (e.g. "Every day @ 8:00 AM") */
-  schedule: string;
-  /** Current operating status */
-  status: 'active' | 'paused' | 'done';
-  /** Lifetime count of automated runs completed */
-  runsCount: number;
-}
-
-/**
- * External workspace tool connector available in Settings.
- */
-export interface ConnectorItem {
-  /** Unique connector identifier */
-  id: string;
-  /** Tool brand name (e.g. "Google Workspace", "Notion") */
-  name: string;
-  /** Description of features enabled by connecting */
-  description: string;
-  /** Distinct brand background color for connector icon emblem */
-  iconBg: string;
-  /** Connection status */
-  connected: boolean;
-  /** Category grouping (e.g. "Productivity", "Developer") */
-  category: string;
-  /** Linked account identifier or email when active */
-  accountEmail?: string;
-}
+// Re-export all types for convenience
+export * from '@/types';
 
 /**
  * Initial seed messages presented when opening the main chat screen.
@@ -200,7 +134,7 @@ export const TASK_GOALS: TaskGoalItem[] = [
 /**
  * Account usage stats and quota reset schedule displayed on Settings tab.
  */
-export const SETTINGS_PLAN_DATA = {
+export const SETTINGS_PLAN_DATA: PlanData = {
   planName: 'Free plan',
   percentUsed: 11,
   resetText: 'Weekly limit resets on Oct 2',
@@ -274,5 +208,3 @@ export const SETTINGS_CONNECTORS: ConnectorItem[] = [
     category: 'Social',
   },
 ];
-
-

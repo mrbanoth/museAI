@@ -1,13 +1,8 @@
 /**
- * IdeasTab Component
+ * Ideas Tab Screen ('/(tabs)/ideas')
  *
- * Inspiration feed showcasing pre-built autonomous agent task templates:
- * - AI Builder Cup Entry Package
- * - Live Money-Making Apps Leaderboard
- * - YouTube Shorts Series Builder
- * - Product Launch Assets & Copy
- *
- * Tapping any idea immediately populates Cooper's chat prompt and transitions to Chat tab.
+ * Inspiration feed showcasing pre-built autonomous agent task templates.
+ * On-click triggers simple Toast notifications.
  */
 
 import React from 'react';
@@ -19,42 +14,34 @@ import {
   TouchableOpacity,
 } from 'react-native';
 import { Colors } from '@/constants/colors';
-import { IDEA_ITEMS, IdeaItem } from '@/constants/dummyData';
+import { IDEA_ITEMS } from '@/constants/dummyData';
+import { showToast } from '@/context/ToastContext';
 
-export interface IdeasTabProps {
-  /** Callback fired when an idea card is tapped, forwarding the template data */
-  onSelectIdea?: (idea: IdeaItem) => void;
-}
-
-/**
- * Prompt & Automation Ideas Feed View
- */
-export const IdeasTab: React.FC<IdeasTabProps> = ({ onSelectIdea }) => {
-
+export default function IdeasScreen() {
   return (
     <View style={styles.container}>
       <ScrollView
         style={styles.scrollArea}
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}>
-        {/* Large Page Title */}
+        {/* Page Title */}
         <View style={styles.titleWrapper}>
           <Text style={styles.pageTitle}>Ideas</Text>
         </View>
 
-        {/* List of Ideas */}
+        {/* Ideas List */}
         {IDEA_ITEMS.map((item, index) => (
           <View key={item.id}>
             <TouchableOpacity
               style={styles.ideaRow}
-              onPress={() => onSelectIdea?.(item)}
+              onPress={() => showToast(`Selected: ${item.title}`)}
               activeOpacity={0.75}>
-              {/* Left 3D Icon Badge */}
+              {/* 3D Emoji Icon Badge */}
               <View style={styles.iconContainer}>
                 <Text style={styles.iconEmoji}>{item.icon}</Text>
               </View>
 
-              {/* Right Content Block */}
+              {/* Title & Description */}
               <View style={styles.textContainer}>
                 <Text style={styles.ideaTitle}>{item.title}</Text>
                 <Text style={styles.ideaDescription} numberOfLines={4}>
@@ -63,14 +50,13 @@ export const IdeasTab: React.FC<IdeasTabProps> = ({ onSelectIdea }) => {
               </View>
             </TouchableOpacity>
 
-            {/* Subtle Row Divider */}
             {index < IDEA_ITEMS.length - 1 && <View style={styles.divider} />}
           </View>
         ))}
       </ScrollView>
     </View>
   );
-};
+}
 
 const styles = StyleSheet.create({
   container: {
@@ -135,5 +121,3 @@ const styles = StyleSheet.create({
     marginHorizontal: 20,
   },
 });
-
-export default IdeasTab;

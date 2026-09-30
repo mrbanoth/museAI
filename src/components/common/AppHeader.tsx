@@ -70,11 +70,7 @@ export const AppHeader: React.FC<AppHeaderProps> = ({
         accessibilityLabel={`${agentName} profile`}
         accessibilityRole="button">
         <View style={styles.mascotContainer}>
-          <MascotAvatar
-            size="header"
-            iconType={mascotIcon}
-            customColor={mascotColor}
-          />
+          <MascotAvatar size={54} />
         </View>
 
         {/* Floating Capsule Name Pill */}

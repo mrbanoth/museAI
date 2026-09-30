@@ -29,7 +29,9 @@ import {
   Edit02Icon,
 } from '@hugeicons/core-free-icons';
 import { Colors } from '@/constants/colors';
-import { SIDE_CHATS, SideChatItem } from '@/constants/dummyData';
+import { SIDE_CHATS } from '@/constants/dummyData';
+import { SideChatItem } from '@/types';
+import { showToast } from '@/context/ToastContext';
 
 export interface SidebarDrawerProps {
   /** Visibility state of the drawer modal */
@@ -106,6 +108,7 @@ export const SidebarDrawer: React.FC<SidebarDrawerProps> = ({
             <TouchableOpacity
               style={styles.mainChatCapsule}
               onPress={() => {
+                showToast('Main chat');
                 onSelectChat('Main chat');
                 onClose();
               }}
@@ -128,7 +131,10 @@ export const SidebarDrawer: React.FC<SidebarDrawerProps> = ({
 
               <TouchableOpacity
                 style={styles.trashBtn}
-                onPress={onClearSideChats}
+                onPress={() => {
+                  showToast('Side chats cleared');
+                  onClearSideChats?.();
+                }}
                 activeOpacity={0.7}
                 accessibilityLabel="Clear side chats">
                 <HugeiconsIcon
@@ -146,6 +152,7 @@ export const SidebarDrawer: React.FC<SidebarDrawerProps> = ({
                 key={chat.id}
                 style={styles.chatRow}
                 onPress={() => {
+                  showToast(chat.title);
                   onSelectChat(chat.title);
                   onClose();
                 }}
@@ -166,6 +173,7 @@ export const SidebarDrawer: React.FC<SidebarDrawerProps> = ({
             <TouchableOpacity
               style={styles.circleBtn}
               onPress={() => {
+                showToast('Settings');
                 onClose();
                 onOpenSettings?.();
               }}
@@ -200,6 +208,7 @@ export const SidebarDrawer: React.FC<SidebarDrawerProps> = ({
             <TouchableOpacity
               style={styles.circleBtn}
               onPress={() => {
+                showToast('New chat');
                 onClose();
                 onNewChat();
               }}

@@ -1,12 +1,12 @@
 /**
- * Home Route ('/home')
+ * Tab Index Route ('/(tabs)')
  *
- * Redirects to the new Expo Router tabs layout ('/(tabs)/chat').
+ * Redirects directly to the default Chat tab.
  */
 
 import React from 'react';
 import { Redirect } from 'expo-router';
 
-export default function Home() {
+export default function TabIndex() {
   return <Redirect href={'/(tabs)/chat' as any} />;
 }
