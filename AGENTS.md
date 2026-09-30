@@ -1,41 +1,109 @@
-This is an Expo/React Native mobile application. Prioritize mobile-first patterns, performance, and cross-platform compatibility.
+# Muse AI Clone - Developer & Agent Guide
 
-## Expo has changed — do not trust your training data
+This is an Expo/React Native application for **Muse AI** (and AI companion **Cooper**) — an autonomous AI agent application tailored for recurring tasks, automated workflows, chat companion interactions, and scheduled operations.
 
-Expo ships breaking changes every SDK release. APIs you remember are likely renamed, moved, or removed. Before writing any code that touches an Expo, EAS, or React Native API:
+---
 
-1. Read the major version of the `expo` package in `package.json`.
-2. Fetch the matching versioned docs: `https://docs.expo.dev/versions/v<major>.0.0/`
-3. For anything else, fetch https://docs.expo.dev/llms.txt — an index of all Expo docs with corrections to common LLM misconceptions. Follow its links to the specific page you need; never answer from memory.
+## 🚀 Project Overview
 
-## Commands
+- **App Name:** Muse AI Clone
+- **Core Concept:** Autonomous AI Agent & Chat Companion for Recurring Tasks, Goals, and Automated Workflows
+- **Platform:** iOS, Android, and Web (Universal React Native)
+- **Current Phase:** Full UI Implementation with Pixel-Perfect Chat, Header Mascot, Floating Dock Tabs, Sidebar Drawer, and Settings.
 
-Use `bunx` instead of `npx` if the project uses bun (`bun.lock` present).
+---
 
-```bash
-npx expo install <package>  # ALWAYS use instead of npm/yarn/pnpm/bun add — resolves SDK-compatible versions
-npx expo start              # start the dev server
-npx expo lint               # lint
-npx tsc --noEmit            # typecheck
-npx expo-doctor             # diagnose dependency and config issues
-npx expo install --fix      # fix incompatible package versions
+## 🛠️ Tech Stack
+
+- **Framework:** [Expo](https://docs.expo.dev/) (SDK 57)
+- **Runtime:** React Native 0.86.3 / React 19.2.3
+- **Router:** [Expo Router](https://docs.expo.dev/router/introduction/) (File-based navigation in `src/app/`)
+- **Vector Icons:** `@hugeicons/react-native` & `@hugeicons/core-free-icons`
+- **Vectors & SVG:** `react-native-svg`
+- **Design Tokens:** Centralized in `src/constants/colors.ts`
+- **Safe Area:** `react-native-safe-area-context`
+
+---
+
+## 🎨 Design System & Color Tokens (`src/constants/colors.ts`)
+
+Always reference and add color definitions in `src/constants/colors.ts`. Never hardcode ad-hoc hex values inside components.
+
+| Token | Hex / Value | Purpose |
+|---|---|---|
+| `Colors.primary` | `#2563EB` | Primary brand blue |
+| `Colors.chatBubbleUser` | `#E8C4B4` | Warm peach terracotta user chat bubble |
+| `Colors.chatBubbleAi` | `#EEF0F2` | Soft light gray agent message bubble |
+| `Colors.tabActiveBg` | `#E6E8EA` | Active tab pill capsule background in dock |
+| `Colors.iconDark` | `#1E2022` | Dark charcoal for icons and typography |
+| `Colors.iconMuted` | `#9E9E9E` | Secondary gray for placeholder and timestamps |
+| `Colors.statusBlue` | `#0066FF` | Online indicator dot on header drawer button |
+| `Colors.white` | `#FFFFFF` | Main background & floating capsules |
+
+---
+
+## 📁 Directory Structure & Architecture
+
+```
+muse_ai_clone/
+├── AGENTS.md                  # Project & agent guidelines
+├── package.json               # Dependencies & scripts
+├── assets/
+│   └── images/
+│       └── cooper_mascot.jpg  # 3D character mascot avatar portrait
+├── src/
+│   ├── app/                   # Expo Router screens
+│   │   ├── _layout.tsx        # Root Stack navigator & ThemeProvider
+│   │   ├── index.tsx          # Initial entry point (SignInScreen)
+│   │   └── home.tsx           # Home screen route (HomeScreen)
+│   ├── components/            # Modular, reusable UI components
+│   │   ├── auth/              # Authentication components
+│   │   │   ├── GoogleIcon.tsx
+│   │   │   ├── MuseLogo.tsx
+│   │   │   ├── GoogleSignInButton.tsx
+│   │   │   └── index.ts
+│   │   ├── common/            # Shared layout components
+│   │   │   ├── AppHeader.tsx          # 2-line menu + Blue dot, 3D Mascot + Name Capsule, 3-dots
+│   │   │   ├── MascotAvatar.tsx       # 3D Cooper Mascot / customizable avatar
+│   │   │   ├── TabNavigationBar.tsx   # Floating stadium dock (Chat, Feed, Ideas, Task, Apps)
+│   │   │   ├── SidebarDrawer.tsx      # Slide-in session history (Main chat, Side chats, Search, Settings)
+│   │   │   ├── SettingsMenuModal.tsx  # 3-dots action sheet (Edit Avatar, Rename, Delete Chat)
+│   │   │   ├── EditAgentModal.tsx     # Custom mascot/name editor with live preview
+│   │   │   └── index.ts
+│   │   ├── chat/              # Chat components
+│   │   │   ├── ChatBubble.tsx         # Peach user bubble & gray agent bubble
+│   │   │   ├── ChatMessageList.tsx    # Scrollable history with centered date header
+│   │   │   ├── ChatInputBar.tsx       # Floating pill (+, Message placeholder, Mic)
+│   │   │   ├── TypingIndicator.tsx    # Animated pulse thinking dots
+│   │   │   └── index.ts
+│   │   └── tabs/              # Additional Tab Views
+│   │       ├── FeedTab.tsx            # Clean empty Feed tab view
+│   │       ├── IdeasTab.tsx           # Clean minimal Ideas view
+│   │       ├── TasksTab.tsx           # Scheduled goals & recurring tasks
+│   │       ├── SettingsTab.tsx        # Comprehensive Settings & Connectors view
+│   │       └── index.ts
+│   ├── screens/
+│   │   ├── HomeScreen.tsx     # Composed Home screen with tab state and modals
+│   │   └── SignInScreen.tsx   # Google Sign-in screen
+│   └── constants/
+│       ├── colors.ts          # Central color palette
+│       ├── dummyData.ts       # Initial chat & sample workflows
+│       └── theme.ts           # Spacing and typography
 ```
 
-Run lint and typecheck before declaring any task done.
+For the exhaustive file-by-file guide, see [`CODEBASE_EXPLANATION.md`](file:///Users/rahulsanarahulp/Documents/Projects/React%20Native/muse_ai_clone/CODEBASE_EXPLANATION.md).
 
-## Navigation & Routing
+---
 
-- Use **Expo Router** for all navigation. Routes live in `src/app/` — every file there is a screen, `_layout.tsx` files define navigators. Keep non-route code (components, hooks, utils) outside `src/app/`.
-- Import `Link`, `router`, and `useLocalSearchParams` from `expo-router`.
-- Docs: https://docs.expo.dev/router/introduction.md
+## ⚡ Useful Commands
 
-## Building with EAS
+```bash
+# Start the Expo development server
+npx expo start
 
-Use EAS to build, sign, and submit the app in the cloud (`eas build`, `eas submit`) and to ship over-the-air updates (`eas update`) — no local Xcode or Android Studio required. Run EAS CLI as `bunx eas-cli <command>` in Bun projects, or `npx eas-cli@latest <command>` otherwise; substitute that for bare `eas` in docs examples.
-Docs: https://docs.expo.dev/eas/index.md
+# Typecheck the whole project
+npx tsc --noEmit
 
-## Rules
-
-- If `ios/` and `android/` directories do not exist, they are generated (Continuous Native Generation). Never create or edit them by hand — configure native behavior in `app.json` and config plugins.
-- Expo Go only includes its bundled native modules. After adding a library with native code, the app needs a development build: `npx expo run:ios|android` locally, or `eas build --profile development`.
-- Prefer recommended Expo modules over third-party libraries, and check your available skills before adding dependencies. Docs: https://docs.expo.dev/versions/latest/index.md
+# Install compatible packages (ALWAYS use this instead of npm i / yarn add)
+npx expo install <package-name>
+```

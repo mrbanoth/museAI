@@ -1,40 +1,31 @@
 /**
- * Below are the colors that are used in the app. The colors are defined in the light and dark mode.
- * There are many other ways to style your app. For example, [Nativewind](https://www.nativewind.dev/), [Tamagui](https://tamagui.dev/), [unistyles](https://reactnativeunistyles.vercel.app), etc.
+ * Muse AI Clone - Theme, Typography & Layout Constants
+ *
+ * Provides cross-platform font families, standardized spacing scales,
+ * and layout geometry tokens used across screens and components.
  */
 
-import '@/global.css';
-
 import { Platform } from 'react-native';
+import { Colors } from './colors';
 
-export const Colors = {
-  light: {
-    text: '#000000',
-    background: '#ffffff',
-    backgroundElement: '#F0F0F3',
-    backgroundSelected: '#E0E1E6',
-    textSecondary: '#60646C',
-  },
-  dark: {
-    text: '#ffffff',
-    background: '#000000',
-    backgroundElement: '#212225',
-    backgroundSelected: '#2E3135',
-    textSecondary: '#B0B4BA',
-  },
-} as const;
+export { Colors } from './colors';
 
+/**
+ * Valid theme keys supported by light and dark color palettes.
+ */
 export type ThemeColor = keyof typeof Colors.light & keyof typeof Colors.dark;
 
+/**
+ * Cross-platform font family mappings:
+ * - iOS: native Apple San Francisco system design fonts
+ * - Android/Default: robust platform fallbacks
+ * - Web: clean modern sans-serif typography stack
+ */
 export const Fonts = Platform.select({
   ios: {
-    /** iOS `UIFontDescriptorSystemDesignDefault` */
     sans: 'system-ui',
-    /** iOS `UIFontDescriptorSystemDesignSerif` */
     serif: 'ui-serif',
-    /** iOS `UIFontDescriptorSystemDesignRounded` */
     rounded: 'ui-rounded',
-    /** iOS `UIFontDescriptorSystemDesignMonospaced` */
     mono: 'ui-monospace',
   },
   default: {
@@ -44,13 +35,16 @@ export const Fonts = Platform.select({
     mono: 'monospace',
   },
   web: {
-    sans: 'var(--font-display)',
-    serif: 'var(--font-serif)',
-    rounded: 'var(--font-rounded)',
-    mono: 'var(--font-mono)',
+    sans: 'Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
+    serif: 'Georgia, "Times New Roman", serif',
+    rounded: '"SF Pro Rounded", "Hiragino Maru Gothic ProN", sans-serif',
+    mono: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace',
   },
 });
 
+/**
+ * Consistent 8-point spacing grid used for padding, margins, and gaps.
+ */
 export const Spacing = {
   half: 2,
   one: 4,
@@ -61,5 +55,13 @@ export const Spacing = {
   six: 64,
 } as const;
 
+/**
+ * Platform-dependent safe insets for bottom floating tab bar dock.
+ */
 export const BottomTabInset = Platform.select({ ios: 50, android: 80 }) ?? 0;
+
+/**
+ * Maximum content container width for responsive web / tablet rendering.
+ */
 export const MaxContentWidth = 800;
+
