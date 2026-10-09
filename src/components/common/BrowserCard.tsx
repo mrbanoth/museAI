@@ -1,14 +1,7 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Platform } from 'react-native';
 import { HugeiconsIcon } from '@hugeicons/react-native';
-import {
-  Globe02Icon,
-  SparklesIcon,
-  ArrowExpand01Icon,
-  Minimize01Icon,
-  RefreshIcon,
-  ArrowRight01Icon,
-} from '@hugeicons/core-free-icons';
+import { Globe02Icon, SparklesIcon } from '@hugeicons/core-free-icons';
 import { Colors } from '@/constants/colors';
 
 export interface BrowserCardProps {
@@ -22,58 +15,32 @@ export interface BrowserCardProps {
 export const BrowserCard: React.FC<BrowserCardProps> = ({
   title = 'Browser (Beta)',
   url,
-  statusText = 'Live session completed',
-  previewType = 'web',
+  statusText = 'Selecting seats...',
+  previewType = 'seats',
   onOpenBrowser,
 }) => {
-  const [isExpanded, setIsExpanded] = useState(false);
-  const [refreshKey, setRefreshKey] = useState(0);
-
   const targetUrl = url || 'https://news.ycombinator.com';
+  const domain = targetUrl.replace(/^https?:\/\//, '').split('/')[0];
 
   const rows = ['A', 'B', 'C', 'D', 'E', 'F'];
   const cols = 9;
 
   return (
     <View style={styles.container}>
-      {/* Top Header Row */}
+      {/* 1. Header Row */}
       <View style={styles.header}>
-        <View style={styles.headerLeft}>
-          <View style={styles.globeIconWrap}>
-            <HugeiconsIcon icon={Globe02Icon} size={16} color={Colors.primary} strokeWidth={2.2} />
-          </View>
-          <View style={{ flex: 1 }}>
-            <Text style={styles.title}>{title}</Text>
-            <Text style={styles.subStatus} numberOfLines={1}>
-              {statusText}
-            </Text>
-          </View>
+        <View style={styles.globeIconWrap}>
+          <HugeiconsIcon icon={Globe02Icon} size={16} color={Colors.primary} strokeWidth={2.2} />
         </View>
-
-        {/* Controls: Reload & Inline Expand */}
-        <View style={styles.headerControls}>
-          <TouchableOpacity
-            style={styles.controlBtn}
-            onPress={() => setRefreshKey((k) => k + 1)}
-            activeOpacity={0.7}
-            accessibilityLabel="Refresh mini browser">
-            <HugeiconsIcon icon={RefreshIcon} size={15} color={Colors.iconMuted} />
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={styles.controlBtn}
-            onPress={() => setIsExpanded(!isExpanded)}
-            activeOpacity={0.7}
-            accessibilityLabel={isExpanded ? 'Collapse' : 'Expand'}>
-            <HugeiconsIcon
-              icon={isExpanded ? Minimize01Icon : ArrowExpand01Icon}
-              size={15}
-              color={Colors.iconDark}
-            />
-          </TouchableOpacity>
+        <View style={styles.headerTextWrap}>
+          <Text style={styles.title}>{title}</Text>
+          <Text style={styles.subStatus} numberOfLines={1}>
+            {statusText}
+          </Text>
         </View>
       </View>
 
-      {/* Mini Browser Canvas Box */}
+      {/* 2. Main Visual Canvas Box (Always Open Directly in this Box) */}
       {previewType === 'seats' ? (
         <View style={styles.canvasArea}>
           <View style={styles.screenBar}>
@@ -121,50 +88,42 @@ export const BrowserCard: React.FC<BrowserCardProps> = ({
           </View>
         </View>
       ) : (
-        <View style={[styles.miniBrowserBox, isExpanded && styles.miniBrowserBoxExpanded]}>
-          {/* Mini URL Bar */}
+        <View style={styles.webCanvasBox}>
+          {/* Address Bar */}
           <View style={styles.addressBar}>
-            <View style={styles.liveIndicatorDot} />
+            <View style={styles.liveDot} />
             <Text style={styles.addressText} numberOfLines={1}>
               {targetUrl}
             </Text>
           </View>
 
-          {/* Embedded Web View Port inside the Mini Box */}
-          <View style={[styles.viewportArea, isExpanded && styles.viewportAreaExpanded]}>
+          {/* Web Viewport in this box */}
+          <View style={styles.viewport}>
             {Platform.OS === 'web' ? (
               // @ts-ignore
               <iframe
-                key={`iframe-${refreshKey}`}
                 src={targetUrl}
-                style={styles.webIframe}
-                title="Mini Browser View"
+                style={styles.iframe}
+                title="Browser View"
                 sandbox="allow-scripts allow-same-origin allow-forms allow-popups"
               />
             ) : (
-              <View style={styles.nativeMiniPreview}>
-                <View style={styles.previewCenterBadge}>
-                  <HugeiconsIcon icon={SparklesIcon} size={24} color={Colors.primary} />
-                  <Text style={styles.previewSiteName} numberOfLines={1}>
-                    {targetUrl.replace(/^https?:\/\//, '').split('/')[0]}
-                  </Text>
-                  <Text style={styles.previewSubtext}>
-                    Live cloud browser session active
-                  </Text>
-                </View>
+              <View style={styles.nativePreview}>
+                <HugeiconsIcon icon={SparklesIcon} size={28} color={Colors.primary} />
+                <Text style={styles.nativeDomain}>{domain}</Text>
+                <Text style={styles.nativeStatus}>Live cloud browser session active</Text>
               </View>
             )}
           </View>
         </View>
       )}
 
-      {/* Bottom Action Button */}
+      {/* 3. Open Browser Action Button */}
       <TouchableOpacity
         style={styles.openBtn}
         onPress={onOpenBrowser}
         activeOpacity={0.85}>
         <Text style={styles.openBtnText}>Open browser</Text>
-        <HugeiconsIcon icon={ArrowRight01Icon} size={14} color={Colors.iconDark} strokeWidth={2.4} />
       </TouchableOpacity>
     </View>
   );
@@ -175,34 +134,30 @@ const styles = StyleSheet.create({
     marginTop: 10,
     borderRadius: 22,
     backgroundColor: '#F3F4F6',
-    padding: 14,
+    padding: 16,
     borderWidth: 1,
     borderColor: '#E5E7EB',
     width: '100%',
-    maxWidth: 360,
   },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 12,
-  },
-  headerLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
     gap: 10,
-    flex: 1,
+    marginBottom: 14,
   },
   globeIconWrap: {
-    width: 32,
-    height: 32,
+    width: 34,
+    height: 34,
     borderRadius: 10,
     backgroundColor: '#EFF6FF',
     alignItems: 'center',
     justifyContent: 'center',
   },
+  headerTextWrap: {
+    flex: 1,
+  },
   title: {
-    fontSize: 14,
+    fontSize: 14.5,
     fontWeight: '700',
     color: Colors.iconDark,
   },
@@ -211,92 +166,68 @@ const styles = StyleSheet.create({
     color: Colors.textSecondary,
     marginTop: 1,
   },
-  headerControls: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  controlBtn: {
-    width: 28,
-    height: 28,
-    borderRadius: 8,
-    backgroundColor: '#FFFFFF',
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-  },
   canvasArea: {
     backgroundColor: '#FFFFFF',
     borderRadius: 16,
     padding: 16,
     alignItems: 'center',
-    marginBottom: 12,
+    marginBottom: 14,
   },
-  miniBrowserBox: {
+  webCanvasBox: {
     backgroundColor: '#FFFFFF',
     borderRadius: 16,
     overflow: 'hidden',
-    marginBottom: 12,
+    marginBottom: 14,
     borderWidth: 1,
     borderColor: '#E2E8F0',
-  },
-  miniBrowserBoxExpanded: {
-    borderColor: Colors.primary,
   },
   addressBar: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#F8FAFC',
-    paddingHorizontal: 10,
-    paddingVertical: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
     borderBottomWidth: 1,
     borderBottomColor: '#E2E8F0',
     gap: 8,
   },
-  liveIndicatorDot: {
+  liveDot: {
     width: 7,
     height: 7,
     borderRadius: 3.5,
     backgroundColor: '#10B981',
   },
   addressText: {
-    fontSize: 11.5,
+    fontSize: 12,
     color: '#475569',
     fontWeight: '500',
     flex: 1,
   },
-  viewportArea: {
-    height: 180,
+  viewport: {
+    height: 200,
     width: '100%',
     backgroundColor: '#FFFFFF',
   },
-  viewportAreaExpanded: {
-    height: 320,
-  },
-  webIframe: {
+  iframe: {
     width: '100%',
     height: '100%',
     border: 'none',
   } as any,
-  nativeMiniPreview: {
+  nativePreview: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
     padding: 16,
     backgroundColor: '#FAFAFA',
-  },
-  previewCenterBadge: {
-    alignItems: 'center',
     gap: 6,
   },
-  previewSiteName: {
-    fontSize: 14,
+  nativeDomain: {
+    fontSize: 15,
     fontWeight: '700',
     color: Colors.iconDark,
     marginTop: 4,
   },
-  previewSubtext: {
+  nativeStatus: {
     fontSize: 12,
     color: Colors.textSecondary,
     textAlign: 'center',
@@ -371,18 +302,15 @@ const styles = StyleSheet.create({
   },
   openBtn: {
     backgroundColor: '#FFFFFF',
-    borderRadius: 18,
-    paddingVertical: 10,
-    paddingHorizontal: 16,
-    flexDirection: 'row',
+    borderRadius: 20,
+    paddingVertical: 12,
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 6,
     borderWidth: 1,
     borderColor: '#E2E8F0',
   },
   openBtnText: {
-    fontSize: 13.5,
+    fontSize: 14,
     fontWeight: '700',
     color: Colors.iconDark,
   },
