@@ -36,11 +36,11 @@ export interface BrowserCardProps {
 }
 
 const HUMAN_ACTIONS = [
-  '🤖 Navigating to web page...',
-  '🖱️ Moving cursor to search bar...',
-  '⌨️ Typing query & filtering options...',
-  '🎯 Selecting best available items...',
-  '✅ Extracting structured details...',
+  { icon: Globe02Icon, text: 'Navigating to target web page...' },
+  { icon: SparklesIcon, text: 'Moving cursor to search bar...' },
+  { icon: Search01Icon, text: 'Typing query and filtering options...' },
+  { icon: CheckmarkCircle01Icon, text: 'Selecting best available items...' },
+  { icon: CheckmarkCircle01Icon, text: 'Extracting structured details...' },
 ];
 
 export const BrowserCard: React.FC<BrowserCardProps> = ({
@@ -330,7 +330,13 @@ export const BrowserCard: React.FC<BrowserCardProps> = ({
 
       {/* 3. Live Action Step Ticker */}
       <View style={styles.stepTickerRow}>
-        <Text style={styles.stepTickerText}>{HUMAN_ACTIONS[currentActionIndex]}</Text>
+        <HugeiconsIcon
+          icon={HUMAN_ACTIONS[currentActionIndex].icon}
+          size={14}
+          color={Colors.primary}
+          strokeWidth={2.2}
+        />
+        <Text style={styles.stepTickerText}>{HUMAN_ACTIONS[currentActionIndex].text}</Text>
       </View>
 
       {/* 4. Open Browser Action Button */}
@@ -551,8 +557,12 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(37, 99, 235, 0.25)',
   },
   stepTickerRow: {
-    paddingVertical: 6,
-    paddingHorizontal: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingVertical: 7,
+    paddingHorizontal: 10,
     backgroundColor: '#FFFFFF',
     borderRadius: 10,
     marginBottom: 10,

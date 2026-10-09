@@ -57,9 +57,9 @@ export const CheckoutCard: React.FC<CheckoutCardProps> = ({
         </View>
 
         <View style={styles.productRow}>
-          {/* Stroller Emoji / Graphic */}
+          {/* Stroller / Product Graphic */}
           <View style={styles.productGraphic}>
-            <Text style={{ fontSize: 42 }}>🛒</Text>
+            <HugeiconsIcon icon={ShoppingCart01Icon} size={36} color={Colors.primary} strokeWidth={2} />
           </View>
 
           <View style={styles.productDetails}>

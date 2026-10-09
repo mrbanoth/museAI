@@ -318,13 +318,16 @@ export default function GoalsScreen() {
                   newCategory === 'tracking' && styles.categoryTabActive,
                 ]}
                 onPress={() => setNewCategory('tracking')}>
-                <Text
-                  style={[
-                    styles.categoryTabText,
-                    newCategory === 'tracking' && styles.categoryTabTextActive,
-                  ]}>
-                  🟢 Tracking
-                </Text>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                  <View style={styles.sectionDotGreen} />
+                  <Text
+                    style={[
+                      styles.categoryTabText,
+                      newCategory === 'tracking' && styles.categoryTabTextActive,
+                    ]}>
+                    Tracking
+                  </Text>
+                </View>
               </TouchableOpacity>
               <TouchableOpacity
                 style={[
@@ -332,13 +335,16 @@ export default function GoalsScreen() {
                   newCategory === 'goals' && styles.categoryTabActive,
                 ]}
                 onPress={() => setNewCategory('goals')}>
-                <Text
-                  style={[
-                    styles.categoryTabText,
-                    newCategory === 'goals' && styles.categoryTabTextActive,
-                  ]}>
-                  🔵 Goal
-                </Text>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                  <View style={styles.sectionDotBlue} />
+                  <Text
+                    style={[
+                      styles.categoryTabText,
+                      newCategory === 'goals' && styles.categoryTabTextActive,
+                    ]}>
+                    Goal
+                  </Text>
+                </View>
               </TouchableOpacity>
             </View>
 

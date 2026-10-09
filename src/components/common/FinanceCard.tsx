@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, TouchableOpacity, Platform } from 'react-native
 import { HugeiconsIcon } from '@hugeicons/react-native';
 import { MoreHorizontalIcon } from '@hugeicons/core-free-icons';
 import { Colors } from '@/constants/colors';
+import { BrandLogoIcon } from './BrandLogoIcon';
 
 export interface FinanceCardProps {
   bannerText?: string;
@@ -59,7 +60,7 @@ export const FinanceCard: React.FC<FinanceCardProps> = ({
         onPress={onOpenTracker}
         activeOpacity={0.85}>
         <View style={styles.toolIcon}>
-          <Text style={{ fontSize: 20 }}>💵</Text>
+          <BrandLogoIcon name="plaid" size={24} />
         </View>
         <View style={styles.toolTextCol}>
           <Text style={styles.toolTitle}>Finance tracker</Text>
