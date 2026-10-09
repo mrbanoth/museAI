@@ -1,4 +1,13 @@
-import { searchWeb, fetchWebPage, runCloudBrowserAutomation, createCloudSession } from './browserbase';
+import { GoogleGenAI } from '@google/genai';
+import dotenv from 'dotenv';
+import {
+  searchWeb,
+  fetchWebPage,
+  runCloudBrowserAutomation,
+  createCloudSession,
+} from './browserbase';
+
+dotenv.config();
 
 export interface AgentAction {
   type: 'search' | 'fetch' | 'browser_session' | 'task_run';
@@ -16,33 +25,249 @@ export interface AgentResponse {
   suggestedTasks?: string[];
 }
 
+// Tool definitions for Google Gemini
+const agentTools = [
+  {
+    functionDeclarations: [
+      {
+        name: 'browse_web_page',
+        description:
+          'Opens a real Chrome browser in the cloud on Browserbase to navigate a target URL, extract headings, structured data, and generate a live session replay.',
+        parameters: {
+          type: 'OBJECT',
+          properties: {
+            url: {
+              type: 'STRING',
+              description: 'The full HTTP/HTTPS URL to navigate and extract data from.',
+            },
+            goal: {
+              type: 'STRING',
+              description: 'Brief description of what information to look for on the page.',
+            },
+          },
+          required: ['url'],
+        },
+      },
+      {
+        name: 'search_web',
+        description:
+          'Searches the web for up-to-date information, news, rankings, or answers using Browserbase Search.',
+        parameters: {
+          type: 'OBJECT',
+          properties: {
+            query: {
+              type: 'STRING',
+              description: 'The search query to look up on the web.',
+            },
+          },
+          required: ['query'],
+        },
+      },
+      {
+        name: 'fetch_page_content',
+        description:
+          'Performs a fast, lightweight page fetch without spinning up a full browser.',
+        parameters: {
+          type: 'OBJECT',
+          properties: {
+            url: {
+              type: 'STRING',
+              description: 'The URL to fetch content from.',
+            },
+          },
+          required: ['url'],
+        },
+      },
+    ],
+  },
+];
+
+const SYSTEM_INSTRUCTION = `You are Cooper, an autonomous AI companion and proactive intelligence agent in Muse AI.
+You are warm, intelligent, concise, action-oriented, and equipped with real cloud browser automation capabilities powered by Browserbase.
+When the user asks you to check websites, read news, track prices, research topics, or perform workflows:
+- Use your tools to browse, search, or fetch data.
+- Synthesize findings clearly and concisely with bullet points and bold highlights.
+- Highlight that you executed the actions inside Browserbase cloud browsers.`;
+
 /**
- * Autonomous agent engine for Cooper AI Companion
+ * Executes a tool called by the LLM
+ */
+async function executeTool(name: string, args: any, actions: AgentAction[]): Promise<any> {
+  console.log(`🤖 [Cooper Tool Call] ${name}(${JSON.stringify(args)})`);
+
+  if (name === 'browse_web_page') {
+    const { url, goal } = args;
+    const sessionRes = await runCloudBrowserAutomation(url, goal || `Browse ${url}`, async (page) => {
+      const title = await page.title().catch(() => '');
+      const headings = await page.locator('h1, h2, h3').allTextContents().catch(() => []);
+      const linksCount = await page.locator('a').count().catch(() => 0);
+      return {
+        title,
+        topHeadings: headings.slice(0, 6),
+        linksCount,
+      };
+    });
+
+    actions.push({
+      type: 'browser_session',
+      title: `Cloud Browser: ${url}`,
+      url,
+      sessionId: sessionRes.sessionId,
+      liveViewUrl: sessionRes.liveViewUrl,
+      replayUrl: sessionRes.replayUrl,
+      details: sessionRes.data,
+    });
+
+    return {
+      status: sessionRes.status,
+      sessionId: sessionRes.sessionId,
+      extracted: sessionRes.data,
+      replayUrl: sessionRes.replayUrl,
+    };
+  }
+
+  if (name === 'search_web') {
+    const { query } = args;
+    const searchRes = await searchWeb(query, 5);
+
+    // Also spin up a session for verification
+    const cloudSession = await createCloudSession();
+    actions.push({
+      type: 'browser_session',
+      title: `Search: "${query}"`,
+      sessionId: cloudSession.session.id,
+      liveViewUrl: cloudSession.liveViewUrl,
+      replayUrl: cloudSession.replayUrl,
+      details: searchRes.results,
+    });
+
+    return {
+      results: searchRes.results,
+      sessionId: cloudSession.session.id,
+    };
+  }
+
+  if (name === 'fetch_page_content') {
+    const { url } = args;
+    const fetchRes = await fetchWebPage(url);
+    actions.push({
+      type: 'fetch',
+      title: `Fetch: ${url}`,
+      url,
+      details: fetchRes,
+    });
+    return fetchRes;
+  }
+
+  return { error: `Unknown tool: ${name}` };
+}
+
+/**
+ * Autonomous agent engine for Cooper AI Companion powered by Gemini
  */
 export async function processAgentChat(
   userMessage: string,
   history: { sender: 'user' | 'agent'; text: string }[] = []
 ): Promise<AgentResponse> {
-  const lower = userMessage.toLowerCase().trim();
+  const geminiKey = process.env.GEMINI_API_KEY;
   const actions: AgentAction[] = [];
 
-  // 1. Detect URL or Web Browsing Requests
+  // If GEMINI_API_KEY is available, use Gemini 2.5 Flash
+  if (geminiKey) {
+    try {
+      const ai = new GoogleGenAI({ apiKey: geminiKey });
+
+      // Convert history
+      const formattedHistory = history.slice(-6).map((h) => ({
+        role: h.sender === 'user' ? 'user' : 'model',
+        parts: [{ text: h.text }],
+      }));
+
+      // 1. Initial LLM Turn with Tool Call capability
+      const response = await ai.models.generateContent({
+        model: 'gemini-2.5-flash',
+        contents: [
+          ...formattedHistory,
+          { role: 'user', parts: [{ text: userMessage }] },
+        ],
+        config: {
+          systemInstruction: SYSTEM_INSTRUCTION,
+          tools: agentTools as any,
+          temperature: 0.7,
+        },
+      });
+
+      // Check if the model called any tools
+      const functionCalls = response.functionCalls;
+
+      if (functionCalls && functionCalls.length > 0) {
+        const toolResponses: Array<{ name: string; response: any }> = [];
+
+        for (const call of functionCalls) {
+          const result = await executeTool(call.name, call.args, actions);
+          toolResponses.push({
+            name: call.name,
+            response: result,
+          });
+        }
+
+        // 2. Second turn: Feed tool outputs back to generate the final synthesis
+        const followUp = await ai.models.generateContent({
+          model: 'gemini-2.5-flash',
+          contents: [
+            ...formattedHistory,
+            { role: 'user', parts: [{ text: userMessage }] },
+            {
+              role: 'model',
+              parts: functionCalls.map((fc: any) => ({
+                functionCall: { name: fc.name, args: fc.args },
+              })),
+            },
+            {
+              role: 'user',
+              parts: toolResponses.map((tr) => ({
+                functionResponse: { name: tr.name, response: tr.response },
+              })),
+            },
+          ],
+          config: {
+            systemInstruction: SYSTEM_INSTRUCTION,
+            temperature: 0.7,
+          },
+        });
+
+        return {
+          reply: followUp.text || 'I have finished executing the web automation.',
+          actions,
+          suggestedTasks: [
+            'Schedule this as a daily routine',
+            'Export summary report',
+          ],
+        };
+      }
+
+      return {
+        reply: response.text || "I'm ready to help with your automated goals and web research!",
+        actions,
+      };
+    } catch (err: any) {
+      console.warn('⚠️ [Gemini LLM Fallback]:', err.message);
+      // Fall through to deterministic autonomous engine below
+    }
+  }
+
+  // Deterministic Fallback Autonomous Engine (handles URLs, Search, Goals natively)
+  const lower = userMessage.toLowerCase().trim();
   const urlMatch = userMessage.match(/https?:\/\/[^\s]+/i);
 
   if (urlMatch) {
     const targetUrl = urlMatch[0];
-    console.log(`[Agent] Detected URL browsing request for: ${targetUrl}`);
-
-    // Launch cloud browser session to visit and analyze
     const sessionRes = await runCloudBrowserAutomation(targetUrl, `Analyze page: ${targetUrl}`, async (page) => {
-      const title = await page.title();
-      const metaDesc = await page.locator('meta[name="description"]').getAttribute('content').catch(() => '');
+      const title = await page.title().catch(() => '');
       const headings = await page.locator('h1, h2, h3').allTextContents().catch(() => []);
       const linksCount = await page.locator('a').count().catch(() => 0);
-
       return {
         title,
-        metaDescription: metaDesc,
         topHeadings: headings.slice(0, 5),
         linksCount,
       };
@@ -59,22 +284,20 @@ export async function processAgentChat(
     });
 
     const pageTitle = sessionRes.data?.title || targetUrl;
-    const desc = sessionRes.data?.metaDescription ? `\n> ${sessionRes.data.metaDescription}` : '';
     const headings = sessionRes.data?.topHeadings?.length
       ? `\n\n**Key sections found:**\n` + sessionRes.data.topHeadings.map((h: string) => `• ${h.trim()}`).join('\n')
       : '';
 
     return {
-      reply: `I opened **${targetUrl}** in a dedicated Browserbase cloud browser session! 🌐\n\n**Page Title:** ${pageTitle}${desc}${headings}\n\nYou can inspect the full cloud session live view and recording using the link below.`,
+      reply: `I navigated to **${targetUrl}** in a dedicated Browserbase cloud browser session! 🌐\n\n**Page Title:** ${pageTitle}${headings}\n\nYou can watch the full cloud session live view and recording below.`,
       actions,
       suggestedTasks: [
-        `Monitor ${new URL(targetUrl).hostname} for changes`,
+        `Monitor ${new URL(targetUrl).hostname} for updates`,
         `Extract structured data from ${new URL(targetUrl).hostname}`,
       ],
     };
   }
 
-  // 2. Detect Search / Research Queries
   if (
     lower.startsWith('search') ||
     lower.startsWith('find') ||
@@ -82,68 +305,33 @@ export async function processAgentChat(
     lower.includes('latest') ||
     lower.includes('news') ||
     lower.includes('research') ||
-    lower.includes('price of') ||
-    lower.includes('scrape')
+    lower.includes('price')
   ) {
-    const query = userMessage
-      .replace(/^(search for|search|find|look up|research|scrape)\s+/i, '')
-      .trim();
-
-    console.log(`[Agent] Running Browserbase Web Search for query: "${query}"`);
-
-    // First search
+    const query = userMessage.replace(/^(search for|search|find|look up|research|scrape)\s+/i, '').trim();
     const searchRes = await searchWeb(query || userMessage, 4);
 
-    actions.push({
-      type: 'search',
-      title: `Web search for "${query || userMessage}"`,
-      details: searchRes.results,
-    });
-
-    // Also spin up a cloud browser verification session
     const cloudSession = await createCloudSession();
     actions.push({
       type: 'browser_session',
-      title: `Browserbase Cloud Agent Session`,
+      title: `Search: "${query || userMessage}"`,
       sessionId: cloudSession.session.id,
       liveViewUrl: cloudSession.liveViewUrl,
       replayUrl: cloudSession.replayUrl,
+      details: searchRes.results,
     });
 
     return {
-      reply: `I investigated **"${query || userMessage}"** across the web using Browserbase cloud capabilities! 🔍\n\nI've gathered insights and initiated a cloud session to verify the latest sources.`,
+      reply: `I researched **"${query || userMessage}"** across the web using Browserbase cloud capabilities! 🔍\n\nI initiated a cloud browser session to verify sources in real-time.`,
       actions,
       suggestedTasks: [
         `Schedule daily research for "${query || userMessage}"`,
-        `Set up alert when new updates appear`,
+        `Set up alert for new updates`,
       ],
     };
   }
 
-  // 3. Goal / Routine / Task trigger
-  if (lower.includes('goal') || lower.includes('routine') || lower.includes('health') || lower.includes('task')) {
-    const session = await createCloudSession();
-    actions.push({
-      type: 'task_run',
-      title: 'Autonomous Goal Setup',
-      sessionId: session.session.id,
-      liveViewUrl: session.liveViewUrl,
-      replayUrl: session.replayUrl,
-    });
-
-    return {
-      reply: `I've initialized your automated goal workflow! 🎯\n\nI will monitor updates, crawl target resources periodically, and keep your Feed synchronized. Your cloud browser session is ready.`,
-      actions,
-      suggestedTasks: [
-        'Run goal now in cloud browser',
-        'Configure execution schedule (Daily / Hourly)',
-      ],
-    };
-  }
-
-  // 4. Default Conversational Assistant with Cooper persona
   return {
-    reply: `Hello! I'm Cooper, your autonomous AI agent companion. 🤖\n\nI can navigate live websites, extract real-time data, execute automated workflows, and research topics in real cloud Chrome browsers powered by **Browserbase**.\n\nTry asking me to:\n• *Navigate to https://news.ycombinator.com and summarize top stories*\n• *Search for latest AI news this week*\n• *Track product pricing or launch a scheduled routine*`,
+    reply: `Hello! I'm Cooper, your autonomous AI agent companion. 🤖\n\nI can navigate live websites, extract real-time data, execute automated workflows, and research topics in real cloud Chrome browsers powered by **Browserbase**.\n\nTry asking me to:\n• *Navigate to https://news.ycombinator.com and summarize top stories*\n• *Search for latest AI model releases*\n• *Track product pricing or launch a scheduled routine*`,
     actions: [],
     suggestedTasks: [
       'Browse https://github.com/trending',
