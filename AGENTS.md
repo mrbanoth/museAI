@@ -74,15 +74,19 @@ muse_ai_clone/
 
 ---
 
-## ⚡ Useful Commands
+## ⚡ Useful Commands & Git Guidelines
 
 ```bash
 # Start the Expo development server
 npx expo start
 
+# Start the Agent Backend
+npm run server
+
 # Typecheck the whole project
 npx tsc --noEmit
-
-# Install compatible packages (ALWAYS use this instead of npm i / yarn add)
-npx expo install <package-name>
 ```
+
+### 📌 Git Commit Guidelines
+- Keep commit messages **short, concise, and meaningful** (e.g. `feat: add task scheduler`, `fix: chat scroll offset`, `refactor: browserbase service`).
+- Always commit and push directly to `main`.
