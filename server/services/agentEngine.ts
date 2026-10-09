@@ -184,8 +184,9 @@ export async function processAgentChat(
       }));
 
       // 1. Initial LLM Turn with Tool Call capability
+      const modelName = 'gemini-3.8-flash';
       const response = await ai.models.generateContent({
-        model: 'gemini-2.5-flash',
+        model: modelName,
         contents: [
           ...formattedHistory,
           { role: 'user', parts: [{ text: userMessage }] },
@@ -214,7 +215,7 @@ export async function processAgentChat(
 
         // 2. Second turn: Feed tool outputs back to generate the final synthesis
         const followUp = await ai.models.generateContent({
-          model: 'gemini-2.5-flash',
+          model: modelName,
           contents: [
             ...formattedHistory,
             { role: 'user', parts: [{ text: userMessage }] },
