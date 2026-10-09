@@ -1,16 +1,22 @@
 import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { HugeiconsIcon } from '@hugeicons/react-native';
-import { Globe02Icon } from '@hugeicons/core-free-icons';
+import { Globe02Icon, PlayIcon, SparklesIcon } from '@hugeicons/core-free-icons';
 import { Colors } from '@/constants/colors';
 
 export interface BrowserCardProps {
+  title?: string;
+  url?: string;
   statusText?: string;
+  previewType?: 'seats' | 'web';
   onOpenBrowser?: () => void;
 }
 
 export const BrowserCard: React.FC<BrowserCardProps> = ({
+  title = 'Browser (Beta)',
+  url,
   statusText = 'Selecting seats...',
+  previewType = 'seats',
   onOpenBrowser,
 }) => {
   const rows = ['A', 'B', 'C', 'D', 'E', 'F'];
@@ -23,58 +29,78 @@ export const BrowserCard: React.FC<BrowserCardProps> = ({
         <View style={styles.globeIconWrap}>
           <HugeiconsIcon icon={Globe02Icon} size={16} color={Colors.primary} strokeWidth={2.2} />
         </View>
-        <View>
-          <Text style={styles.title}>Browser (Beta)</Text>
-          <Text style={styles.subStatus}>{statusText}</Text>
+        <View style={{ flex: 1 }}>
+          <Text style={styles.title}>{title}</Text>
+          <Text style={styles.subStatus} numberOfLines={1}>
+            {statusText}
+          </Text>
         </View>
       </View>
 
-      {/* Seat Map Visual Canvas */}
-      <View style={styles.canvasArea}>
-        <View style={styles.screenBar}>
-          <Text style={styles.screenText}>SCREEN</Text>
-        </View>
+      {/* Visual Canvas */}
+      {previewType === 'seats' ? (
+        <View style={styles.canvasArea}>
+          <View style={styles.screenBar}>
+            <Text style={styles.screenText}>SCREEN</Text>
+          </View>
 
-        <View style={styles.grid}>
-          {rows.map((row) => (
-            <View key={row} style={styles.row}>
-              <Text style={styles.rowLabel}>{row}</Text>
-              <View style={styles.seatsRow}>
-                {Array.from({ length: cols }).map((_, cIdx) => {
-                  const isSelected = row === 'C' && (cIdx === 4 || cIdx === 5);
-                  const isTaken = (row === 'A' && cIdx < 3) || (row === 'D' && cIdx === 2);
-                  return (
-                    <View
-                      key={`seat-${row}-${cIdx}`}
-                      style={[
-                        styles.seat,
-                        isSelected && styles.seatSelected,
-                        isTaken && styles.seatTaken,
-                      ]}
-                    />
-                  );
-                })}
+          <View style={styles.grid}>
+            {rows.map((row) => (
+              <View key={row} style={styles.row}>
+                <Text style={styles.rowLabel}>{row}</Text>
+                <View style={styles.seatsRow}>
+                  {Array.from({ length: cols }).map((_, cIdx) => {
+                    const isSelected = row === 'C' && (cIdx === 4 || cIdx === 5);
+                    const isTaken = (row === 'A' && cIdx < 3) || (row === 'D' && cIdx === 2);
+                    return (
+                      <View
+                        key={`seat-${row}-${cIdx}`}
+                        style={[
+                          styles.seat,
+                          isSelected && styles.seatSelected,
+                          isTaken && styles.seatTaken,
+                        ]}
+                      />
+                    );
+                  })}
+                </View>
               </View>
-            </View>
-          ))}
-        </View>
+            ))}
+          </View>
 
-        {/* Legend */}
-        <View style={styles.legend}>
-          <View style={styles.legendItem}>
-            <View style={[styles.legendDot, { backgroundColor: '#CBD5E1' }]} />
-            <Text style={styles.legendText}>Available</Text>
-          </View>
-          <View style={styles.legendItem}>
-            <View style={[styles.legendDot, { backgroundColor: '#E2E8F0' }]} />
-            <Text style={styles.legendText}>Taken</Text>
-          </View>
-          <View style={styles.legendItem}>
-            <View style={[styles.legendDot, { backgroundColor: '#2563EB' }]} />
-            <Text style={styles.legendText}>Your seats</Text>
+          {/* Legend */}
+          <View style={styles.legend}>
+            <View style={styles.legendItem}>
+              <View style={[styles.legendDot, { backgroundColor: '#CBD5E1' }]} />
+              <Text style={styles.legendText}>Available</Text>
+            </View>
+            <View style={styles.legendItem}>
+              <View style={[styles.legendDot, { backgroundColor: '#E2E8F0' }]} />
+              <Text style={styles.legendText}>Taken</Text>
+            </View>
+            <View style={styles.legendItem}>
+              <View style={[styles.legendDot, { backgroundColor: '#2563EB' }]} />
+              <Text style={styles.legendText}>Your seats</Text>
+            </View>
           </View>
         </View>
-      </View>
+      ) : (
+        <View style={styles.webCanvasArea}>
+          <View style={styles.browserAddressBar}>
+            <View style={styles.browserDot} />
+            <Text style={styles.browserAddressText} numberOfLines={1}>
+              {url || 'https://www.browserbase.com'}
+            </Text>
+          </View>
+          <View style={styles.webContentPlaceholder}>
+            <HugeiconsIcon icon={SparklesIcon} size={28} color={Colors.primary} />
+            <Text style={styles.webContentTitle}>Cloud Browser Automation</Text>
+            <Text style={styles.webContentDesc}>
+              Session executed in Browserbase cloud sandbox
+            </Text>
+          </View>
+        </View>
+      )}
 
       {/* Action Button */}
       <TouchableOpacity
@@ -126,6 +152,51 @@ const styles = StyleSheet.create({
     padding: 16,
     alignItems: 'center',
     marginBottom: 14,
+  },
+  webCanvasArea: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    padding: 14,
+    marginBottom: 14,
+  },
+  browserAddressBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F1F5F9',
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    gap: 8,
+    marginBottom: 12,
+  },
+  browserDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: '#10B981',
+  },
+  browserAddressText: {
+    fontSize: 12,
+    color: '#475569',
+    fontWeight: '500',
+    flex: 1,
+  },
+  webContentPlaceholder: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 18,
+    gap: 6,
+  },
+  webContentTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: Colors.iconDark,
+    marginTop: 4,
+  },
+  webContentDesc: {
+    fontSize: 12,
+    color: Colors.textSecondary,
+    textAlign: 'center',
   },
   screenBar: {
     width: '80%',

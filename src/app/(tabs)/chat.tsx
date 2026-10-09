@@ -23,6 +23,7 @@ import {
   ActivityIndicator,
   Modal,
   Image,
+  Linking,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useFocusEffect } from 'expo-router';
@@ -182,13 +183,26 @@ export default function ChatScreen() {
     }
   };
 
-  const handleOpenLink = (url?: string, title?: string) => {
+  const handleOpenLink = async (url?: string, title?: string) => {
     if (!url) return;
-    setLiveModal({
-      visible: true,
-      url,
-      title: title || 'Browserbase Cloud Live View',
-    });
+    try {
+      if (Platform.OS === 'web') {
+        setLiveModal({
+          visible: true,
+          url,
+          title: title || 'Browserbase Cloud Live View',
+        });
+      } else {
+        const WebBrowser = await import('expo-web-browser');
+        await WebBrowser.openBrowserAsync(url, {
+          presentationStyle: WebBrowser.WebBrowserPresentationStyle.PAGE_SHEET,
+          toolbarColor: '#FFFFFF',
+          controlsColor: '#2563EB',
+        });
+      }
+    } catch {
+      Linking.openURL(url);
+    }
   };
 
   const handleClearCurrentChat = async () => {
@@ -345,38 +359,57 @@ export default function ChatScreen() {
                       {/* Live Browserbase Cloud Actions */}
                       {msg.actions && msg.actions.length > 0 && !msg.widget && (
                         <View style={styles.actionsContainer}>
-                          {msg.actions.map((act, i) => (
-                            <View key={`act-${i}`} style={styles.actionCard}>
-                              <View style={styles.actionHeader}>
-                                <HugeiconsIcon
-                                  icon={Globe02Icon}
-                                  size={16}
-                                  color={Colors.primary}
-                                  strokeWidth={2}
+                          {msg.actions.map((act, i) => {
+                            if (act.type === 'browser_session') {
+                              return (
+                                <BrowserCard
+                                  key={`browser-act-${i}`}
+                                  title={act.title || 'Browser (Beta)'}
+                                  url={act.url || act.liveViewUrl || act.replayUrl}
+                                  statusText="Cloud browser session completed"
+                                  previewType="web"
+                                  onOpenBrowser={() =>
+                                    handleOpenLink(
+                                      act.replayUrl || act.liveViewUrl || act.url || 'https://www.browserbase.com',
+                                      act.title
+                                    )
+                                  }
                                 />
-                                <Text style={styles.actionTitle} numberOfLines={1}>
-                                  {act.title}
-                                </Text>
-                              </View>
-
-                              {act.replayUrl && (
-                                <TouchableOpacity
-                                  style={styles.sessionLinkBtn}
-                                  onPress={() => handleOpenLink(act.replayUrl, act.title)}
-                                  activeOpacity={0.7}>
+                              );
+                            }
+                            return (
+                              <View key={`act-${i}`} style={styles.actionCard}>
+                                <View style={styles.actionHeader}>
                                   <HugeiconsIcon
-                                    icon={PlayIcon}
-                                    size={13}
+                                    icon={Globe02Icon}
+                                    size={16}
                                     color={Colors.primary}
-                                    strokeWidth={2.4}
+                                    strokeWidth={2}
                                   />
-                                  <Text style={styles.sessionLinkText}>
-                                    Watch Live / Replay
+                                  <Text style={styles.actionTitle} numberOfLines={1}>
+                                    {act.title}
                                   </Text>
-                                </TouchableOpacity>
-                              )}
-                            </View>
-                          ))}
+                                </View>
+
+                                {(act.replayUrl || act.url) && (
+                                  <TouchableOpacity
+                                    style={styles.sessionLinkBtn}
+                                    onPress={() => handleOpenLink(act.replayUrl || act.url, act.title)}
+                                    activeOpacity={0.7}>
+                                    <HugeiconsIcon
+                                      icon={PlayIcon}
+                                      size={13}
+                                      color={Colors.primary}
+                                      strokeWidth={2.4}
+                                    />
+                                    <Text style={styles.sessionLinkText}>
+                                      Open Browser / Replay
+                                    </Text>
+                                  </TouchableOpacity>
+                                )}
+                              </View>
+                            );
+                          })}
                         </View>
                       )}
                     </View>
