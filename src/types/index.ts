@@ -17,6 +17,13 @@ export interface ChatMessage {
   text: string;
   /** Formatted timestamp display string (e.g. "3:35 PM") */
   timestamp: string;
+  /** Optional Rich Interactive Agent Widget */
+  widget?: {
+    type: 'finance' | 'browser' | 'checkout' | 'document';
+    data?: any;
+  };
+  /** Optional emoji reaction badge */
+  reaction?: string;
   /** Optional Cloud Browser / Agent Actions associated with this response */
   actions?: Array<{
     type: string;

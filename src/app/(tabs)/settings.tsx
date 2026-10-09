@@ -16,6 +16,8 @@ import {
   ScrollView,
   TouchableOpacity,
   Image,
+  Modal,
+  TextInput,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { HugeiconsIcon } from '@hugeicons/react-native';
@@ -37,6 +39,23 @@ import { StorageService } from '@/services/storage';
 export default function SettingsScreen() {
   const router = useRouter();
   const [userAuth, setUserAuth] = useState<{ name?: string; email?: string; avatar?: string } | null>(null);
+  const [isConnectorsOpen, setIsConnectorsOpen] = useState(false);
+  const [connectorSearch, setConnectorSearch] = useState('');
+
+  const connectedServices = [
+    { name: 'Gmail', icon: '✉️', color: '#EA4335' },
+    { name: 'Google Calendar', icon: '📅', color: '#4285F4' },
+    { name: 'HealthEx', icon: '⚡', color: '#F59E0B' },
+    { name: 'OpenTable', icon: '🔴', color: '#E11D48' },
+    { name: 'Facebook', icon: '🔵', color: '#1877F2' },
+    { name: 'Instagram', icon: '📸', color: '#E1306C' },
+    { name: 'Peloton', icon: '🚴', color: '#1E2022' },
+  ];
+
+  const availableServices = [
+    { name: 'Finances (Plaid)', icon: '🔲' },
+    { name: 'Essential Health', icon: '🏥' },
+  ];
 
   useEffect(() => {
     (async () => {
@@ -109,12 +128,12 @@ export default function SettingsScreen() {
         <View style={styles.groupCard}>
           <TouchableOpacity
             style={styles.listItem}
-            onPress={() => showToast('Browserbase & 7 Connectors Active')}
+            onPress={() => setIsConnectorsOpen(true)}
             activeOpacity={0.65}>
             <View style={styles.listIconCol}>
               <HugeiconsIcon icon={Grid02Icon} size={22} color={Colors.iconDark} strokeWidth={2} />
             </View>
-            <Text style={styles.listLabel}>Connectors (Browserbase Active)</Text>
+            <Text style={styles.listLabel}>Connectors (7 Connected)</Text>
             <HugeiconsIcon icon={ArrowRight01Icon} size={20} color={Colors.iconMuted} strokeWidth={1.8} />
           </TouchableOpacity>
 
@@ -187,6 +206,88 @@ export default function SettingsScreen() {
 
         <View style={{ height: 40 }} />
       </ScrollView>
+
+      {/* Connectors Full Sheet Modal (Matching Screenshot 4) */}
+      <Modal
+        visible={isConnectorsOpen}
+        animationType="slide"
+        onRequestClose={() => setIsConnectorsOpen(false)}>
+        <View style={styles.modalContainer}>
+          {/* Header */}
+          <View style={styles.modalHeader}>
+            <TouchableOpacity
+              style={styles.modalBackBtn}
+              onPress={() => setIsConnectorsOpen(false)}
+              activeOpacity={0.7}>
+              <HugeiconsIcon icon={ArrowRight01Icon} size={20} color={Colors.iconDark} style={{ transform: [{ rotate: '180deg' }] }} />
+            </TouchableOpacity>
+            <Text style={styles.modalTitle}>Connectors</Text>
+            <View style={{ width: 36 }} />
+          </View>
+
+          <ScrollView style={styles.modalScroll} contentContainerStyle={styles.modalScrollContent} showsVerticalScrollIndicator={false}>
+            {/* Search Input */}
+            <View style={styles.searchBar}>
+              <Text style={{ fontSize: 16 }}>🔍</Text>
+              <TextInput
+                style={styles.searchInput}
+                placeholder="Search"
+                placeholderTextColor="#9CA3AF"
+                value={connectorSearch}
+                onChangeText={setConnectorSearch}
+              />
+            </View>
+
+            {/* Connected Section */}
+            <Text style={styles.connectorSectionTitle}>Connected</Text>
+            <View style={styles.connectorCard}>
+              {connectedServices
+                .filter((s) => s.name.toLowerCase().includes(connectorSearch.toLowerCase()))
+                .map((srv, idx) => (
+                  <View key={srv.name}>
+                    <View style={styles.connectorRow}>
+                      <View style={styles.connectorLeft}>
+                        <Text style={{ fontSize: 18 }}>{srv.icon}</Text>
+                        <Text style={styles.connectorName}>{srv.name}</Text>
+                      </View>
+                      <TouchableOpacity
+                        style={styles.moreBtn}
+                        onPress={() => showToast(`${srv.name} settings`)}
+                        activeOpacity={0.7}>
+                        <Text style={{ fontSize: 16, color: '#9CA3AF' }}>•••</Text>
+                      </TouchableOpacity>
+                    </View>
+                    {idx < connectedServices.length - 1 && <View style={styles.connectorDivider} />}
+                  </View>
+                ))}
+            </View>
+
+            {/* Available Section */}
+            <Text style={[styles.connectorSectionTitle, { marginTop: 24 }]}>Available</Text>
+            <View style={styles.connectorCard}>
+              {availableServices
+                .filter((s) => s.name.toLowerCase().includes(connectorSearch.toLowerCase()))
+                .map((srv, idx) => (
+                  <View key={srv.name}>
+                    <View style={styles.connectorRow}>
+                      <View style={styles.connectorLeft}>
+                        <Text style={{ fontSize: 18 }}>{srv.icon}</Text>
+                        <Text style={styles.connectorName}>{srv.name}</Text>
+                      </View>
+                      <TouchableOpacity
+                        style={styles.connectBtn}
+                        onPress={() => showToast(`Connecting to ${srv.name}...`)}
+                        activeOpacity={0.8}>
+                        <Text style={styles.connectBtnText}>Connect</Text>
+                      </TouchableOpacity>
+                    </View>
+                    {idx < availableServices.length - 1 && <View style={styles.connectorDivider} />}
+                  </View>
+                ))}
+            </View>
+          </ScrollView>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -343,5 +444,107 @@ const styles = StyleSheet.create({
     height: 1,
     backgroundColor: '#F0F0F2',
     marginLeft: 48,
+  },
+  modalContainer: {
+    flex: 1,
+    backgroundColor: '#F8FAFC',
+    paddingTop: 40,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingBottom: 16,
+  },
+  modalBackBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#FFFFFF',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  modalTitle: {
+    fontSize: 17,
+    fontWeight: '700',
+    color: Colors.iconDark,
+  },
+  modalScroll: {
+    flex: 1,
+  },
+  modalScrollContent: {
+    paddingHorizontal: 16,
+    paddingBottom: 40,
+  },
+  searchBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    marginBottom: 20,
+    gap: 10,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  searchInput: {
+    flex: 1,
+    fontSize: 15,
+    color: Colors.iconDark,
+  },
+  connectorSectionTitle: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#64748B',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    marginBottom: 10,
+    marginLeft: 4,
+  },
+  connectorCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    overflow: 'hidden',
+  },
+  connectorRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+  },
+  connectorLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  connectorName: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: Colors.iconDark,
+  },
+  moreBtn: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+  },
+  connectorDivider: {
+    height: 1,
+    backgroundColor: '#F1F5F9',
+    marginLeft: 46,
+  },
+  connectBtn: {
+    backgroundColor: '#EFF6FF',
+    paddingHorizontal: 14,
+    paddingVertical: 6,
+    borderRadius: 12,
+  },
+  connectBtnText: {
+    color: Colors.primary,
+    fontWeight: '700',
+    fontSize: 13,
   },
 });

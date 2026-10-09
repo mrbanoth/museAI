@@ -15,8 +15,10 @@ import { Colors } from '@/constants/colors';
 import MascotAvatar from './MascotAvatar';
 
 export interface AppHeaderProps {
-  /** Active agent display name (defaults to 'Muse AI') */
+  /** Active agent display name (defaults to 'Muse') */
   agentName?: string;
+  /** Optional real-time status subtitle e.g. "Booking reservation..." */
+  statusSubtitle?: string;
   /** Mascot emblem icon key or 'muse' */
   mascotIcon?: string;
   /** Accent aura color */
@@ -33,7 +35,8 @@ export interface AppHeaderProps {
  * Global Top Header with 3D Mascot and Action Triggers
  */
 export const AppHeader: React.FC<AppHeaderProps> = ({
-  agentName = 'Muse AI',
+  agentName = 'Muse',
+  statusSubtitle,
   mascotIcon = 'muse',
   mascotColor = Colors.primary,
   onOpenSidebar,
@@ -42,8 +45,7 @@ export const AppHeader: React.FC<AppHeaderProps> = ({
 }) => {
   return (
     <View style={styles.headerContainer}>
-
-      {/* Left Action: Circular White Button with 2 lines and Blue Status Dot */}
+      {/* Left Action: Circular White Button with 2 lines */}
       <View style={styles.sideCol}>
         <TouchableOpacity
           style={styles.circleBtn}
@@ -53,16 +55,14 @@ export const AppHeader: React.FC<AppHeaderProps> = ({
           accessibilityRole="button">
           <HugeiconsIcon
             icon={MenuTwoLineIcon}
-            size={22}
+            size={20}
             color={Colors.iconDark}
-            strokeWidth={2.2}
+            strokeWidth={2.4}
           />
-          {/* Blue status / notification indicator dot */}
-          <View style={styles.blueDot} />
         </TouchableOpacity>
       </View>
 
-      {/* Center: 3D Mascot Character with Floating 'Cooper' Name Capsule Below */}
+      {/* Center: Plush Mascot Character with Floating 'Muse' Name Capsule */}
       <TouchableOpacity
         style={styles.centerCol}
         onPress={onMascotPress || onOpenSettings}
@@ -70,12 +70,15 @@ export const AppHeader: React.FC<AppHeaderProps> = ({
         accessibilityLabel={`${agentName} profile`}
         accessibilityRole="button">
         <View style={styles.mascotContainer}>
-          <MascotAvatar size={54} />
+          <MascotAvatar size={50} />
         </View>
 
         {/* Floating Capsule Name Pill */}
-        <View style={styles.nameCapsule}>
+        <View style={[styles.nameCapsule, !!statusSubtitle && styles.nameCapsuleExpanded]}>
           <Text style={styles.agentNameText}>{agentName}</Text>
+          {statusSubtitle ? (
+            <Text style={styles.statusSubtitleText}>{statusSubtitle}</Text>
+          ) : null}
         </View>
       </TouchableOpacity>
 
@@ -89,7 +92,7 @@ export const AppHeader: React.FC<AppHeaderProps> = ({
           accessibilityRole="button">
           <HugeiconsIcon
             icon={MoreHorizontalIcon}
-            size={24}
+            size={22}
             color={Colors.iconDark}
             strokeWidth={2.2}
           />
@@ -167,6 +170,7 @@ const styles = StyleSheet.create({
     paddingVertical: 5,
     borderRadius: 20,
     marginTop: 4,
+    alignItems: 'center',
     ...Platform.select({
       ios: {
         shadowColor: Colors.black,
@@ -182,11 +186,22 @@ const styles = StyleSheet.create({
       },
     }),
   },
+  nameCapsuleExpanded: {
+    paddingVertical: 6,
+    paddingHorizontal: 18,
+    borderRadius: 16,
+  },
   agentNameText: {
     fontSize: 14,
     fontWeight: '700',
     color: Colors.iconDark,
     letterSpacing: -0.2,
+  },
+  statusSubtitleText: {
+    fontSize: 11,
+    color: Colors.textSecondary,
+    marginTop: 2,
+    fontStyle: 'italic',
   },
 });
 

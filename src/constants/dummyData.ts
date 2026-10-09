@@ -28,14 +28,95 @@ export const INITIAL_CHAT_MESSAGES: ChatMessage[] = [
   {
     id: 'msg-1',
     sender: 'user',
-    text: 'I want to start a health goal',
-    timestamp: '3:35 PM',
+    text: "Look at my last three months of statements. Where's my money actually going? Tell me what you'd change and why.",
+    timestamp: '10:18 AM',
   },
   {
     id: 'msg-2',
     sender: 'agent',
-    text: "I'd love to help with that. In your own words, what would this health goal be about — what's the change you'd want to see?",
-    timestamp: '3:35 PM',
+    text: "You're averaging $4,320/mo. Two things stand out: dining is up 35% to $410/mo, and you have three subscriptions you haven't opened in 90 days. That's $47/mo you won't miss. Want me to cancel them?",
+    timestamp: '10:19 AM',
+    widget: {
+      type: 'finance',
+    },
+  },
+  {
+    id: 'msg-3',
+    sender: 'agent',
+    text: "Tickets just opened for the movie you're tracking. 4:30 PM or 7:30 PM. Interested?",
+    timestamp: '10:20 AM',
+  },
+  {
+    id: 'msg-4',
+    sender: 'user',
+    text: 'Yeah, book for 2',
+    timestamp: '10:21 AM',
+  },
+  {
+    id: 'msg-5',
+    sender: 'user',
+    text: 'Lets do 7:30pm',
+    timestamp: '10:21 AM',
+  },
+  {
+    id: 'msg-6',
+    sender: 'agent',
+    text: 'Selecting the best available seats for you in the middle row...',
+    timestamp: '10:22 AM',
+    widget: {
+      type: 'browser',
+      data: { statusText: 'Selecting seats...' },
+    },
+    actions: [
+      {
+        type: 'browser_session',
+        title: 'Cinema Seats Selection',
+        replayUrl: 'https://www.browserbase.com/sessions/45ea61b8-1a58-405e-8391-6955f71a9e1a',
+      },
+    ],
+  },
+  {
+    id: 'msg-7',
+    sender: 'agent',
+    text: 'Found a few travel strollers for Luca — perfect for your trip. The Glide Pro is $80 (these usually go for $320). Interested?',
+    timestamp: '10:22 AM',
+    widget: {
+      type: 'checkout',
+      data: {
+        productTitle: 'Glide Pro Stroller',
+        price: '$80.00',
+        regularPrice: '$320.00',
+        total: '$80',
+      },
+    },
+  },
+  {
+    id: 'msg-8',
+    sender: 'agent',
+    text: 'Found the field trip form in your email due today, so I filled it out.',
+    timestamp: '10:22 AM',
+    widget: {
+      type: 'document',
+    },
+  },
+  {
+    id: 'msg-9',
+    sender: 'agent',
+    text: "The field trip needs a chaperone, and it looks like you're free. Want me to sign you up and send a confirmation email?",
+    timestamp: '10:22 AM',
+  },
+  {
+    id: 'msg-10',
+    sender: 'user',
+    text: 'Yes, that sounds great!',
+    timestamp: '10:22 AM',
+    reaction: '✍️',
+  },
+  {
+    id: 'msg-11',
+    sender: 'agent',
+    text: "Sent. I'll remind you on Thursday to pack a lunch.",
+    timestamp: '10:23 AM',
   },
 ];
 
@@ -45,27 +126,27 @@ export const INITIAL_CHAT_MESSAGES: ChatMessage[] = [
 export const SIDE_CHATS: SideChatItem[] = [
   {
     id: 'side-1',
-    title: 'Creative story after college fight',
+    title: 'Look at my last three months statements',
     hasUnreadDot: false,
   },
   {
     id: 'side-2',
-    title: 'Greet and start conversation',
+    title: 'Movie tickets reservation 7:30pm',
     hasUnreadDot: false,
   },
   {
     id: 'side-3',
-    title: 'Start a health goal',
+    title: 'Travel stroller deal for Luca',
     hasUnreadDot: false,
   },
   {
     id: 'side-4',
-    title: 'Start a productivity goal',
+    title: 'Field trip permission slip',
     hasUnreadDot: true,
   },
   {
     id: 'side-5',
-    title: 'Start an interests goal',
+    title: 'Marathon training prep',
     hasUnreadDot: true,
   },
 ];
@@ -76,31 +157,38 @@ export const SIDE_CHATS: SideChatItem[] = [
 export const IDEA_ITEMS: IdeaItem[] = [
   {
     id: 'idea-1',
-    icon: '🏆',
-    title: 'I can build your AI Builder Cup entry package',
-    description: "I can research the AI Builder Cup JAPAC's current rules and judging criteria, then build your submission package around a solo-buildable agentic app: an entry draft, demo script, and deadline checklist. It is listed with...",
-    prompt: 'Help me build my AI Builder Cup entry package. Research the rules and build a submission draft, demo script, and checklist.',
+    icon: '🛂',
+    title: 'I can follow up on your airline refund',
+    description: 'I found an email from the airline confirming your canceled flight on October 14, but no refund has been posted. Want me to draft a follow-up and track it until it lands?',
+    prompt: 'Draft a follow-up email for my airline refund and track it until it lands.',
   },
   {
     id: 'idea-2',
-    icon: '🗂️',
-    title: 'I can keep your money-making apps leaderboard',
-    description: "I can turn the money-making apps from your X timeline scan into a living leaderboard, with each app's name, link, and earnings figure tagged claimed or verified. New apps you spot get added to the same list, so you never hav...",
-    prompt: 'Create a living leaderboard of top money-making apps from my X timeline scan, tracking names, links, and verified earnings.',
+    icon: '🛍️',
+    title: 'I can find a bigger stroller for Luca',
+    description: "Based on Luca's age he'll outgrow his stroller in the next month. I'm watching Marketplace for a bigger option under $300.",
+    prompt: "Look for travel stroller options for Luca on Marketplace under $300.",
   },
   {
     id: 'idea-3',
-    icon: '📹',
-    title: 'Turn your next app build into a Shorts series',
-    description: "Share your next app build, and I can map it onto YouTube's 2026 Shorts Series, AI Shorts editing, and real-time dubbing: episode breakdowns, per-episode hooks, and shoot-ready scripts. You stop figuring out how to s...",
-    prompt: 'Turn my app build into a YouTube Shorts series. Break it down into episodes with hooks and shoot-ready scripts.',
+    icon: '👟',
+    title: 'Build a daily training plan for your half marathon',
+    description: 'Your VO2 max is up 4% and your average pace dropped to 9.12. I\'m building a 10-week plan synced to your calendar that adjusts based on your health connector data.',
+    prompt: 'Build a personalized 10-week half marathon training plan synced with my calendar.',
   },
   {
     id: 'idea-4',
-    icon: '🚀',
-    title: 'I can build your launch post and assets',
-    description: 'I can track the top Product Hunt and Hacker News launch sources you pick and draft launch copy, screenshot mockups, and community responses.',
-    prompt: 'Draft my product launch copy, headline variations, and Product Hunt announcement strategy.',
+    icon: '🍽️',
+    title: 'I can book your anniversary dinner',
+    description: "You saved a restaurant on Instagram last month and there's an opening Saturday at 8 PM. Want me to reserve a table for two?",
+    prompt: 'Reserve a table for two at our saved restaurant for this Saturday at 8 PM.',
+  },
+  {
+    id: 'idea-5',
+    icon: '🛏️',
+    title: 'I can help dial in your sleep based on the data',
+    description: 'Cross-referencing your sleep logs with your calendar reveals peak REM cycles when you wrap up screen time by 10 PM. Want a nightly bedtime optimization schedule?',
+    prompt: 'Analyze my sleep tracker logs and create a nightly bedtime routine schedule.',
   },
 ];
 

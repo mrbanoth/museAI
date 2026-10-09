@@ -38,7 +38,13 @@ import { INITIAL_CHAT_MESSAGES } from '@/constants/dummyData';
 import { ChatMessage } from '@/types';
 import { showToast } from '@/context/ToastContext';
 import { ApiService } from '@/services/api';
-import { LiveBrowserModal } from '@/components/common';
+import {
+  LiveBrowserModal,
+  FinanceCard,
+  BrowserCard,
+  CheckoutCard,
+  DocumentCard,
+} from '@/components/common';
 
 export default function ChatScreen() {
   const [messages, setMessages] = useState<ChatMessage[]>(INITIAL_CHAT_MESSAGES);
@@ -164,23 +170,76 @@ export default function ChatScreen() {
                       styles.messageRow,
                       isUser ? styles.userMessageRow : styles.agentMessageRow,
                     ]}>
-                    <TouchableOpacity
-                      activeOpacity={0.85}
-                      onPress={() => showToast(msg.text)}
-                      style={[
-                        styles.bubble,
-                        isUser ? styles.userBubble : styles.agentBubble,
-                      ]}>
-                      <Text
-                        style={[
-                          styles.bubbleText,
-                          isUser ? styles.userBubbleText : styles.agentBubbleText,
-                        ]}>
-                        {msg.text}
-                      </Text>
+                    <View style={styles.bubbleContainer}>
+                      {/* Chat text bubble if text is present */}
+                      {msg.text ? (
+                        <TouchableOpacity
+                          activeOpacity={0.85}
+                          onPress={() => showToast(msg.text)}
+                          style={[
+                            styles.bubble,
+                            isUser ? styles.userBubble : styles.agentBubble,
+                          ]}>
+                          <Text
+                            style={[
+                              styles.bubbleText,
+                              isUser ? styles.userBubbleText : styles.agentBubbleText,
+                            ]}>
+                            {msg.text}
+                          </Text>
+                        </TouchableOpacity>
+                      ) : null}
+
+                      {/* Attached User Emoji Reaction Badge */}
+                      {isUser && msg.reaction && (
+                        <View style={styles.reactionBadge}>
+                          <Text style={styles.reactionText}>{msg.reaction}</Text>
+                        </View>
+                      )}
+
+                      {/* Rich Embedded Widgets */}
+                      {msg.widget?.type === 'finance' && (
+                        <FinanceCard
+                          onOpenTracker={() => showToast('Opened Finance Tracker')}
+                          onOptions={() => showToast('Finance settings')}
+                        />
+                      )}
+
+                      {msg.widget?.type === 'browser' && (
+                        <BrowserCard
+                          statusText={msg.widget.data?.statusText || 'Selecting seats...'}
+                          onOpenBrowser={() =>
+                            handleOpenLink(
+                              'https://www.browserbase.com/sessions/45ea61b8-1a58-405e-8391-6955f71a9e1a',
+                              'Movie Tickets Browser'
+                            )
+                          }
+                        />
+                      )}
+
+                      {msg.widget?.type === 'checkout' && (
+                        <CheckoutCard
+                          productTitle={msg.widget.data?.productTitle || 'Glide Pro Stroller'}
+                          price={msg.widget.data?.price || '$80.00'}
+                          regularPrice={msg.widget.data?.regularPrice || '$320.00'}
+                          total={msg.widget.data?.total || '$80'}
+                          onAllow={() => showToast('Order approved! Placing order on merchant...')}
+                          onDeny={() => showToast('Order denied.')}
+                          onReviewOrder={() =>
+                            handleOpenLink('https://www.google.com/search?q=Glide+Pro+Stroller', 'Review Order')
+                          }
+                        />
+                      )}
+
+                      {msg.widget?.type === 'document' && (
+                        <DocumentCard
+                          onOpenDoc={() => showToast('Opening Field Trip Permission Slip PDF')}
+                          onOptions={() => showToast('Document options')}
+                        />
+                      )}
 
                       {/* Cloud Browser Action Badges */}
-                      {msg.actions && msg.actions.length > 0 && (
+                      {msg.actions && msg.actions.length > 0 && !msg.widget && (
                         <View style={styles.actionsContainer}>
                           {msg.actions.map((act, i) => (
                             <View key={`act-${i}`} style={styles.actionCard}>
@@ -216,7 +275,7 @@ export default function ChatScreen() {
                           ))}
                         </View>
                       )}
-                    </TouchableOpacity>
+                    </View>
                   </View>
                 );
               })}
@@ -340,8 +399,11 @@ const styles = StyleSheet.create({
   agentMessageRow: {
     justifyContent: 'flex-start',
   },
+  bubbleContainer: {
+    maxWidth: '88%',
+    position: 'relative',
+  },
   bubble: {
-    maxWidth: '85%',
     paddingHorizontal: 16,
     paddingVertical: 12,
     borderRadius: 20,
@@ -349,10 +411,31 @@ const styles = StyleSheet.create({
   userBubble: {
     backgroundColor: Colors.chatBubbleUser,
     borderBottomRightRadius: 6,
+    alignSelf: 'flex-end',
   },
   agentBubble: {
     backgroundColor: Colors.chatBubbleAi,
     borderBottomLeftRadius: 6,
+    alignSelf: 'flex-start',
+  },
+  reactionBadge: {
+    position: 'absolute',
+    bottom: -8,
+    right: 4,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    shadowColor: Colors.black,
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 3,
+    elevation: 2,
+  },
+  reactionText: {
+    fontSize: 13,
   },
   bubbleText: {
     fontSize: 15.5,

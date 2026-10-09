@@ -1,10 +1,12 @@
 /**
- * Tasks Tab Screen ('/(tabs)/tasks')
+ * Goals Tab Screen ('/(tabs)/tasks')
  *
- * Minimalist Autonomous Agent Scheduler & Goal Manager:
- * - Clean UI displaying scheduled routines and goals
- * - Live Cloud Browser Execution via Browserbase & Playwright
- * - Direct session replay and status badges
+ * Pixel-perfect implementation of Muse AI Goals & Tracking:
+ * - 🟢 Tracking section with active reservation & watcher items
+ * - 🔵 Goals section with milestone routines
+ * - Expandable 'Show more' sections
+ * - 'Create a goal' category templates
+ * - Live Cloud Browser Execution via Browserbase
  */
 
 import React, { useState } from 'react';
@@ -14,108 +16,104 @@ import {
   StyleSheet,
   ScrollView,
   TouchableOpacity,
-  Switch,
   ActivityIndicator,
-  Platform,
-  Linking,
 } from 'react-native';
 import { HugeiconsIcon } from '@hugeicons/react-native';
 import {
-  Add01Icon,
-  Target01Icon,
-  Clock01Icon,
+  MoreVerticalIcon,
   PlayIcon,
   Globe02Icon,
+  Add01Icon,
 } from '@hugeicons/core-free-icons';
 import { Colors } from '@/constants/colors';
-import { TASK_GOALS } from '@/constants/dummyData';
-import { TaskGoalItem } from '@/types';
 import { showToast } from '@/context/ToastContext';
 import { ApiService } from '@/services/api';
 import { LiveBrowserModal } from '@/components/common';
 
-interface TaskWithSession extends TaskGoalItem {
-  lastSessionId?: string;
-  lastReplayUrl?: string;
+interface GoalItem {
+  id: string;
+  title: string;
+  subtitle: string;
+  category: 'tracking' | 'goals';
+  checked: boolean;
+  replayUrl?: string;
   isRunning?: boolean;
 }
 
-export default function TasksScreen() {
-  const [tasks, setTasks] = useState<TaskWithSession[]>(TASK_GOALS);
+const INITIAL_GOALS: GoalItem[] = [
+  {
+    id: 'track-1',
+    title: 'Dinner reservations',
+    subtitle: 'Sushi restaurants downtown',
+    category: 'tracking',
+    checked: false,
+    replayUrl: 'https://www.browserbase.com/sessions/45ea61b8-1a58-405e-8391-6955f71a9e1a',
+  },
+  {
+    id: 'goal-1',
+    title: 'Marathon prep',
+    subtitle: 'Build endurance, hit your pace goals, and cross that finish line strong.',
+    category: 'goals',
+    checked: false,
+  },
+  {
+    id: 'goal-2',
+    title: 'Save for new car',
+    subtitle: 'On track to hit your goals if you save $210 each month towards your new car fund!',
+    category: 'goals',
+    checked: false,
+  },
+];
+
+export default function GoalsScreen() {
+  const [items, setItems] = useState<GoalItem[]>(INITIAL_GOALS);
+  const [showMoreTracking, setShowMoreTracking] = useState(false);
+  const [showMoreGoals, setShowMoreGoals] = useState(false);
   const [liveModal, setLiveModal] = useState<{ visible: boolean; url: string | null; title?: string }>({
     visible: false,
     url: null,
     title: undefined,
   });
 
-  // Load saved tasks
-  React.useEffect(() => {
-    (async () => {
-      const { StorageService } = await import('@/services/storage');
-      const saved = await StorageService.getTasks();
-      if (saved && saved.length > 0) {
-        setTasks(saved);
-      }
-    })();
-  }, []);
-
-  const handleToggle = async (id: string, title: string) => {
-    const updated = tasks.map((t) =>
-      t.id === id ? { ...t, status: (t.status === 'active' ? 'paused' : 'active') as any } : t
+  const toggleCheck = (id: string) => {
+    setItems((prev) =>
+      prev.map((item) => (item.id === id ? { ...item, checked: !item.checked } : item))
     );
-    setTasks(updated);
-    const { StorageService } = await import('@/services/storage');
-    await StorageService.saveTasks(updated);
-    showToast(`${title} status updated`);
   };
 
-  const handleRunTask = async (task: TaskWithSession) => {
-    setTasks((prev) =>
-      prev.map((t) => (t.id === task.id ? { ...t, isRunning: true } : t))
+  const handleRunGoal = async (goal: GoalItem) => {
+    setItems((prev) =>
+      prev.map((g) => (g.id === goal.id ? { ...g, isRunning: true } : g))
     );
-    showToast(`Launching cloud browser for "${task.title}"...`);
+    showToast(`Muse is launching cloud browser for "${goal.title}"...`);
 
     try {
-      const res = await ApiService.runTask(task.id, task.title);
-
+      const res = await ApiService.runTask(goal.id, goal.title);
       if (res.success) {
-        showToast(`Completed! Replay created.`);
-        const updated = tasks.map((t) =>
-          t.id === task.id
-            ? {
-                ...t,
-                isRunning: false,
-                runsCount: t.runsCount + 1,
-                lastSessionId: res.sessionId,
-                lastReplayUrl: res.replayUrl,
-              }
-            : t
+        showToast('Completed! Replay generated.');
+        setItems((prev) =>
+          prev.map((g) =>
+            g.id === goal.id
+              ? { ...g, isRunning: false, replayUrl: res.replayUrl }
+              : g
+          )
         );
-        setTasks(updated);
-        const { StorageService } = await import('@/services/storage');
-        await StorageService.saveTasks(updated);
       } else {
-        showToast(`Failed: ${res.message || 'Unknown error'}`);
-        setTasks((prev) =>
-          prev.map((t) => (t.id === task.id ? { ...t, isRunning: false } : t))
+        showToast('Execution finished.');
+        setItems((prev) =>
+          prev.map((g) => (g.id === goal.id ? { ...g, isRunning: false } : g))
         );
       }
-    } catch (e: any) {
-      showToast('Execution error');
-      setTasks((prev) =>
-        prev.map((t) => (t.id === task.id ? { ...t, isRunning: false } : t))
+    } catch {
+      showToast('Error executing goal');
+      setItems((prev) =>
+        prev.map((g) => (g.id === goal.id ? { ...g, isRunning: false } : g))
       );
     }
   };
 
-  const handleOpenReplay = (url?: string, title?: string) => {
-    if (!url) return;
-    setLiveModal({
-      visible: true,
-      url,
-      title: title || 'Browserbase Session Replay',
-    });
-  };
+  const trackingItems = items.filter((i) => i.category === 'tracking');
+  const goalItems = items.filter((i) => i.category === 'goals');
 
   return (
     <View style={styles.container}>
@@ -123,107 +121,162 @@ export default function TasksScreen() {
         style={styles.scrollArea}
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}>
-        {/* Page Title & "+ New" Button */}
-        <View style={styles.headerRow}>
-          <Text style={styles.pageTitle}>Scheduled Agents & Goals</Text>
+        {/* Title */}
+        <View style={styles.titleRow}>
+          <Text style={styles.pageTitle}>Goals</Text>
+        </View>
+
+        {/* SECTION 1: 🟢 Tracking */}
+        <View style={styles.sectionHeader}>
+          <View style={styles.greenDot} />
+          <Text style={styles.sectionTitleGreen}>Tracking</Text>
+        </View>
+
+        <View style={styles.itemsList}>
+          {trackingItems.map((item) => (
+            <View key={item.id} style={styles.itemRow}>
+              <TouchableOpacity
+                style={[styles.checkbox, item.checked && styles.checkboxChecked]}
+                onPress={() => toggleCheck(item.id)}
+                activeOpacity={0.7}>
+                {item.checked && <Text style={styles.checkmark}>✓</Text>}
+              </TouchableOpacity>
+
+              <View style={styles.itemDetails}>
+                <Text style={[styles.itemTitle, item.checked && styles.itemCheckedText]}>
+                  {item.title}
+                </Text>
+                <Text style={styles.itemSubtitle}>{item.subtitle}</Text>
+
+                {item.replayUrl && (
+                  <TouchableOpacity
+                    style={styles.replayPill}
+                    onPress={() =>
+                      setLiveModal({
+                        visible: true,
+                        url: item.replayUrl!,
+                        title: item.title,
+                      })
+                    }
+                    activeOpacity={0.7}>
+                    <HugeiconsIcon icon={Globe02Icon} size={11} color={Colors.primary} />
+                    <Text style={styles.replayText}>Cloud Replay</Text>
+                  </TouchableOpacity>
+                )}
+              </View>
+
+              <TouchableOpacity
+                style={styles.actionBtn}
+                onPress={() => handleRunGoal(item)}
+                activeOpacity={0.7}>
+                {item.isRunning ? (
+                  <ActivityIndicator size="small" color={Colors.primary} />
+                ) : (
+                  <HugeiconsIcon icon={MoreVerticalIcon} size={18} color={Colors.iconMuted} />
+                )}
+              </TouchableOpacity>
+            </View>
+          ))}
+
+          {/* Show 2 more */}
           <TouchableOpacity
-            style={styles.newGoalBtn}
-            onPress={() => showToast('Create New Goal')}
-            activeOpacity={0.8}>
-            <HugeiconsIcon icon={Add01Icon} size={15} color={Colors.white} strokeWidth={2.4} />
-            <Text style={styles.newGoalText}>New</Text>
+            style={styles.showMoreRow}
+            onPress={() => {
+              setShowMoreTracking(!showMoreTracking);
+              showToast(showMoreTracking ? 'Collapsed' : 'Showing all tracked items');
+            }}
+            activeOpacity={0.7}>
+            <Text style={styles.dragIcon}>⠿</Text>
+            <Text style={styles.showMoreText}>
+              {showMoreTracking ? 'Show less' : 'Show 2 more'}
+            </Text>
           </TouchableOpacity>
         </View>
 
-        {/* Task Rows */}
-        {tasks.map((task, index) => {
-          const isActive = task.status === 'active';
+        <View style={styles.sectionDivider} />
 
-          return (
-            <View key={task.id}>
+        {/* SECTION 2: 🔵 Goals */}
+        <View style={styles.sectionHeader}>
+          <View style={styles.blueDot} />
+          <Text style={styles.sectionTitleBlue}>Goals</Text>
+        </View>
+
+        <View style={styles.itemsList}>
+          {goalItems.map((item) => (
+            <View key={item.id} style={styles.itemRow}>
               <TouchableOpacity
-                style={styles.taskRow}
-                onPress={() => showToast(task.title)}
-                activeOpacity={0.75}>
-                {/* Left Target Icon Badge */}
-                <View
-                  style={[
-                    styles.iconContainer,
-                    { backgroundColor: isActive ? Colors.primarySubtle : Colors.surfaceMuted },
-                  ]}>
-                  <HugeiconsIcon
-                    icon={Target01Icon}
-                    size={20}
-                    color={isActive ? Colors.primary : Colors.textMuted}
-                    strokeWidth={2}
-                  />
-                </View>
-
-                {/* Center Content */}
-                <View style={styles.textContainer}>
-                  <Text style={[styles.taskTitle, !isActive && styles.pausedText]}>
-                    {task.title}
-                  </Text>
-
-                  <View style={styles.metaRow}>
-                    <View style={styles.scheduleItem}>
-                      <HugeiconsIcon icon={Clock01Icon} size={12} color={Colors.textMuted} />
-                      <Text style={styles.taskSchedule}>{task.schedule}</Text>
-                    </View>
-                    <Text style={styles.metaDot}>•</Text>
-                    <Text style={styles.executionsText}>{task.runsCount} runs</Text>
-                  </View>
-
-                  {/* Cloud Browser Replay Link if run */}
-                  {task.lastReplayUrl && (
-                    <TouchableOpacity
-                      style={styles.replayBadge}
-                      onPress={() => handleOpenReplay(task.lastReplayUrl, task.title)}
-                      activeOpacity={0.7}>
-                      <HugeiconsIcon icon={Globe02Icon} size={12} color={Colors.primary} strokeWidth={2} />
-                      <Text style={styles.replayBadgeText}>Browserbase Replay</Text>
-                    </TouchableOpacity>
-                  )}
-                </View>
-
-                {/* Right Controls: Switch & Run Button */}
-                <View style={styles.actionsCol}>
-                  <Switch
-                    value={isActive}
-                    onValueChange={() => handleToggle(task.id, task.title)}
-                    trackColor={{ false: Colors.border, true: Colors.primaryLight }}
-                    thumbColor={isActive ? Colors.primary : Colors.surfaceMuted}
-                  />
-
-                  <TouchableOpacity
-                    style={[styles.runManualBtn, task.isRunning && styles.runningBtn]}
-                    onPress={() => handleRunTask(task)}
-                    disabled={task.isRunning}
-                    activeOpacity={0.75}>
-                    {task.isRunning ? (
-                      <ActivityIndicator size="small" color={Colors.primary} />
-                    ) : (
-                      <>
-                        <HugeiconsIcon
-                          icon={PlayIcon}
-                          size={12}
-                          color={Colors.primary}
-                          strokeWidth={2.4}
-                        />
-                        <Text style={styles.runManualText}>Run</Text>
-                      </>
-                    )}
-                  </TouchableOpacity>
-                </View>
+                style={[styles.checkbox, item.checked && styles.checkboxChecked]}
+                onPress={() => toggleCheck(item.id)}
+                activeOpacity={0.7}>
+                {item.checked && <Text style={styles.checkmark}>✓</Text>}
               </TouchableOpacity>
 
-              {index < tasks.length - 1 && <View style={styles.divider} />}
+              <View style={styles.itemDetails}>
+                <Text style={[styles.itemTitle, item.checked && styles.itemCheckedText]}>
+                  {item.title}
+                </Text>
+                <Text style={styles.itemSubtitle}>{item.subtitle}</Text>
+              </View>
+
+              <TouchableOpacity
+                style={styles.actionBtn}
+                onPress={() => handleRunGoal(item)}
+                activeOpacity={0.7}>
+                {item.isRunning ? (
+                  <ActivityIndicator size="small" color={Colors.primary} />
+                ) : (
+                  <HugeiconsIcon icon={MoreVerticalIcon} size={18} color={Colors.iconMuted} />
+                )}
+              </TouchableOpacity>
             </View>
-          );
-        })}
+          ))}
+
+          {/* Show 4 more */}
+          <TouchableOpacity
+            style={styles.showMoreRow}
+            onPress={() => {
+              setShowMoreGoals(!showMoreGoals);
+              showToast(showMoreGoals ? 'Collapsed' : 'Showing all goals');
+            }}
+            activeOpacity={0.7}>
+            <Text style={styles.dragIcon}>⠿</Text>
+            <Text style={styles.showMoreText}>
+              {showMoreGoals ? 'Show less' : 'Show 4 more'}
+            </Text>
+          </TouchableOpacity>
+        </View>
+
+        <View style={styles.sectionDivider} />
+
+        {/* SECTION 3: Create a goal */}
+        <View style={styles.createGoalSection}>
+          <Text style={styles.createGoalTitle}>Create a goal</Text>
+
+          <TouchableOpacity
+            style={styles.categoryRow}
+            onPress={() => showToast('Create Health Goal')}
+            activeOpacity={0.7}>
+            <View style={styles.categoryLeft}>
+              <Text style={{ fontSize: 18 }}>🤍</Text>
+              <Text style={styles.categoryName}>Health</Text>
+            </View>
+            <HugeiconsIcon icon={Add01Icon} size={18} color={Colors.iconMuted} />
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.categoryRow}
+            onPress={() => showToast('Create Relationships Goal')}
+            activeOpacity={0.7}>
+            <View style={styles.categoryLeft}>
+              <Text style={{ fontSize: 18 }}>👥</Text>
+              <Text style={styles.categoryName}>Relationships</Text>
+            </View>
+            <HugeiconsIcon icon={Add01Icon} size={18} color={Colors.iconMuted} />
+          </TouchableOpacity>
+        </View>
       </ScrollView>
 
-      {/* Embedded Live Cloud Browser Modal */}
+      {/* Embedded Cloud Browser Live Modal */}
       <LiveBrowserModal
         visible={liveModal.visible}
         url={liveModal.url}
@@ -243,93 +296,96 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   scrollContent: {
-    paddingBottom: 24,
-  },
-  headerRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
     paddingHorizontal: 20,
     paddingTop: 12,
-    paddingBottom: 16,
+    paddingBottom: 40,
+  },
+  titleRow: {
+    marginBottom: 20,
   },
   pageTitle: {
-    fontSize: 28,
-    fontWeight: '700',
+    fontSize: 32,
+    fontWeight: '800',
     color: Colors.iconDark,
     letterSpacing: -0.5,
-    flex: 1,
-    paddingRight: 12,
   },
-  newGoalBtn: {
+  sectionHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: Colors.primary,
-    paddingVertical: 7,
-    paddingHorizontal: 12,
-    borderRadius: 12,
-    gap: 4,
+    gap: 8,
+    marginBottom: 16,
   },
-  newGoalText: {
-    fontSize: 12,
+  greenDot: {
+    width: 9,
+    height: 9,
+    borderRadius: 4.5,
+    backgroundColor: '#10B981',
+  },
+  sectionTitleGreen: {
+    fontSize: 16,
     fontWeight: '700',
-    color: Colors.white,
+    color: '#059669',
   },
-  taskRow: {
+  blueDot: {
+    width: 9,
+    height: 9,
+    borderRadius: 4.5,
+    backgroundColor: '#2563EB',
+  },
+  sectionTitleBlue: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#2563EB',
+  },
+  itemsList: {
+    gap: 16,
+    marginBottom: 10,
+  },
+  itemRow: {
     flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingVertical: 18,
+    alignItems: 'flex-start',
     gap: 14,
   },
-  iconContainer: {
-    width: 44,
-    height: 44,
-    borderRadius: 12,
+  checkbox: {
+    width: 22,
+    height: 22,
+    borderRadius: 6,
+    borderWidth: 1.8,
+    borderColor: '#D1D5DB',
     alignItems: 'center',
     justifyContent: 'center',
+    marginTop: 2,
   },
-  textContainer: {
+  checkboxChecked: {
+    backgroundColor: Colors.primary,
+    borderColor: Colors.primary,
+  },
+  checkmark: {
+    color: '#FFFFFF',
+    fontSize: 13,
+    fontWeight: '900',
+    marginTop: -2,
+  },
+  itemDetails: {
     flex: 1,
   },
-  taskTitle: {
+  itemTitle: {
     fontSize: 15.5,
     fontWeight: '700',
     color: Colors.iconDark,
-    lineHeight: 21,
     letterSpacing: -0.2,
   },
-  pausedText: {
+  itemCheckedText: {
+    textDecorationLine: 'line-through',
     color: Colors.textMuted,
   },
-  metaRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flexWrap: 'wrap',
-    gap: 6,
-    marginTop: 5,
-  },
-  scheduleItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-  },
-  taskSchedule: {
+  itemSubtitle: {
     fontSize: 13,
-    color: '#707070',
-    fontWeight: '500',
-    letterSpacing: -0.1,
+    color: '#6B7280',
+    lineHeight: 18,
+    marginTop: 3,
   },
-  metaDot: {
-    fontSize: 12,
-    color: Colors.textMuted,
-  },
-  executionsText: {
-    fontSize: 13,
-    color: '#707070',
-    fontWeight: '500',
-  },
-  replayBadge: {
+  replayPill: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
@@ -337,43 +393,62 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
     paddingVertical: 3,
     borderRadius: 6,
-    marginTop: 8,
+    marginTop: 6,
     alignSelf: 'flex-start',
   },
-  replayBadgeText: {
+  replayText: {
     fontSize: 11,
     fontWeight: '600',
     color: Colors.primary,
   },
-  actionsCol: {
-    alignItems: 'flex-end',
-    gap: 8,
+  actionBtn: {
+    padding: 4,
   },
-  runManualBtn: {
+  showMoreRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: Colors.primarySubtle,
-    borderWidth: 1,
-    borderColor: Colors.primaryBorder,
-    paddingVertical: 5,
-    paddingHorizontal: 10,
-    borderRadius: 8,
-    gap: 4,
-    minWidth: 54,
-    justifyContent: 'center',
+    gap: 8,
+    paddingVertical: 6,
   },
-  runningBtn: {
-    backgroundColor: '#F1F5F9',
-    borderColor: '#E2E8F0',
+  dragIcon: {
+    fontSize: 16,
+    color: '#9CA3AF',
   },
-  runManualText: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: Colors.primary,
+  showMoreText: {
+    fontSize: 13.5,
+    fontWeight: '600',
+    color: '#9CA3AF',
   },
-  divider: {
+  sectionDivider: {
     height: 1,
-    backgroundColor: '#F0F0F2',
-    marginHorizontal: 20,
+    backgroundColor: '#F3F4F6',
+    marginVertical: 18,
+  },
+  createGoalSection: {
+    marginTop: 6,
+  },
+  createGoalTitle: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: Colors.iconDark,
+    marginBottom: 14,
+  },
+  categoryRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F9FAFB',
+  },
+  categoryLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  categoryName: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: Colors.iconDark,
   },
 });
