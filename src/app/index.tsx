@@ -38,6 +38,7 @@ import { useRouter } from 'expo-router';
 import { showToast } from '@/context/ToastContext';
 import { StorageService } from '@/services/storage';
 import { SupabaseService } from '@/services/supabase';
+import { MascotAvatar } from '@/components/common';
 
 /**
  * Official Google Brand SVG Icon
@@ -226,11 +227,7 @@ export default function SignInScreen() {
                   ],
                 },
               ]}>
-              <Image
-                source={require('../../assets/images/muse_mascot.png')}
-                style={styles.mascotImage}
-                resizeMode="cover"
-              />
+              <MascotAvatar size={96} />
             </Animated.View>
 
             <View style={styles.brandRow}>

@@ -51,6 +51,7 @@ import {
   BrowserCard,
   CheckoutCard,
   DocumentCard,
+  MascotAvatar,
 } from '@/components/common';
 
 const QUICK_PROMPTS = [
@@ -235,11 +236,7 @@ export default function ChatScreen() {
               {!hasUserMessages && (
                 <View style={styles.emptyWelcomeContainer}>
                   <View style={styles.welcomeMascotAura}>
-                    <Image
-                      source={require('../../../assets/images/muse_mascot.png')}
-                      style={styles.welcomeMascot}
-                      resizeMode="cover"
-                    />
+                    <MascotAvatar size={80} />
                   </View>
                   <Text style={styles.welcomeTitle}>What can I do for you?</Text>
                   <Text style={styles.welcomeSubtitle}>
