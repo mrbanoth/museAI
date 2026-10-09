@@ -6,12 +6,14 @@ import { ChatMessage, TaskGoalItem, FeedItem, AgentProfile } from '@/types';
 export const SUPABASE_URL = process.env.EXPO_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL || 'https://hmkdafydnmouvmdvgwin.supabase.co';
 export const SUPABASE_ANON_KEY = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY || 'sb_publishable_3k8MdQMUoI-zhCXze3dBIA_LD_hBBjT';
 
+const isBrowser = typeof window !== 'undefined';
+
 export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
   auth: {
-    storage: AsyncStorage as any,
-    autoRefreshToken: true,
-    persistSession: true,
-    detectSessionInUrl: Platform.OS === 'web',
+    storage: (isBrowser || Platform.OS !== 'web' ? AsyncStorage : undefined) as any,
+    autoRefreshToken: isBrowser || Platform.OS !== 'web',
+    persistSession: isBrowser || Platform.OS !== 'web',
+    detectSessionInUrl: isBrowser && Platform.OS === 'web',
   },
 });
 
