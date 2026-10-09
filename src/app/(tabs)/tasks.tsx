@@ -42,10 +42,24 @@ interface TaskWithSession extends TaskGoalItem {
 export default function TasksScreen() {
   const [tasks, setTasks] = useState<TaskWithSession[]>(TASK_GOALS);
 
-  const handleToggle = (id: string, title: string) => {
-    setTasks((prev) =>
-      prev.map((t) => (t.id === id ? { ...t, status: t.status === 'active' ? 'paused' : 'active' } : t))
+  // Load saved tasks
+  React.useEffect(() => {
+    (async () => {
+      const { StorageService } = await import('@/services/storage');
+      const saved = await StorageService.getTasks();
+      if (saved && saved.length > 0) {
+        setTasks(saved);
+      }
+    })();
+  }, []);
+
+  const handleToggle = async (id: string, title: string) => {
+    const updated = tasks.map((t) =>
+      t.id === id ? { ...t, status: (t.status === 'active' ? 'paused' : 'active') as any } : t
     );
+    setTasks(updated);
+    const { StorageService } = await import('@/services/storage');
+    await StorageService.saveTasks(updated);
     showToast(`${title} status updated`);
   };
 
@@ -60,19 +74,20 @@ export default function TasksScreen() {
 
       if (res.success) {
         showToast(`Completed! Replay created.`);
-        setTasks((prev) =>
-          prev.map((t) =>
-            t.id === task.id
-              ? {
-                  ...t,
-                  isRunning: false,
-                  runsCount: t.runsCount + 1,
-                  lastSessionId: res.sessionId,
-                  lastReplayUrl: res.replayUrl,
-                }
-              : t
-          )
+        const updated = tasks.map((t) =>
+          t.id === task.id
+            ? {
+                ...t,
+                isRunning: false,
+                runsCount: t.runsCount + 1,
+                lastSessionId: res.sessionId,
+                lastReplayUrl: res.replayUrl,
+              }
+            : t
         );
+        setTasks(updated);
+        const { StorageService } = await import('@/services/storage');
+        await StorageService.saveTasks(updated);
       } else {
         showToast(`Failed: ${res.message || 'Unknown error'}`);
         setTasks((prev) =>

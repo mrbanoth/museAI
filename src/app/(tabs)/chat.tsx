@@ -46,6 +46,17 @@ export default function ChatScreen() {
   const scrollViewRef = useRef<ScrollView>(null);
   const insets = useSafeAreaInsets();
 
+  // Load persisted chat messages on mount
+  useEffect(() => {
+    (async () => {
+      const { StorageService } = await import('@/services/storage');
+      const saved = await StorageService.getChatMessages();
+      if (saved && saved.length > 0) {
+        setMessages(saved);
+      }
+    })();
+  }, []);
+
   // Calculate header height offset for iOS KeyboardAvoidingView (SafeAreaView top + AppHeader height)
   const headerOffset = Platform.OS === 'ios' ? insets.top + 98 : 0;
 
@@ -75,12 +86,16 @@ export default function ChatScreen() {
       timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
     };
 
-    setMessages((prev) => [...prev, userMsg]);
+    const updatedWithUser = [...messages, userMsg];
+    setMessages(updatedWithUser);
     setInputText('');
     setIsProcessing(true);
 
+    const { StorageService } = await import('@/services/storage');
+    await StorageService.saveChatMessages(updatedWithUser);
+
     try {
-      const history = messages.map((m) => ({ sender: m.sender, text: m.text }));
+      const history = updatedWithUser.map((m) => ({ sender: m.sender, text: m.text }));
       const res = await ApiService.sendMessage(text, history);
 
       const agentMsg: ChatMessage = {
@@ -91,7 +106,9 @@ export default function ChatScreen() {
         actions: res.data?.actions,
       };
 
-      setMessages((prev) => [...prev, agentMsg]);
+      const finalMessages = [...updatedWithUser, agentMsg];
+      setMessages(finalMessages);
+      await StorageService.saveChatMessages(finalMessages);
     } catch (err: any) {
       showToast('Failed to reach agent');
     } finally {

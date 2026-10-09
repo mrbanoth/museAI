@@ -48,6 +48,19 @@ export default function TabLayout() {
   const [isSettingsMenuOpen, setIsSettingsMenuOpen] = useState(false);
   const [isEditAgentOpen, setIsEditAgentOpen] = useState(false);
 
+  // Load saved profile
+  React.useEffect(() => {
+    (async () => {
+      const saved = await (await import('@/services/storage')).StorageService.getAgentProfile();
+      if (saved) {
+        setAgentName(saved.name);
+        setAgentSubtitle(saved.subtitle);
+        setMascotIcon(saved.icon);
+        setMascotColor(saved.color);
+      }
+    })();
+  }, []);
+
   return (
     <SafeAreaView style={styles.safeArea} edges={['top', 'left', 'right']}>
       {/* 1. Persistent App Header */}
@@ -207,11 +220,13 @@ export default function TabLayout() {
         initialIcon={mascotIcon}
         initialColor={mascotColor}
         onClose={() => setIsEditAgentOpen(false)}
-        onSave={(data) => {
+        onSave={async (data) => {
           setAgentName(data.name);
           setAgentSubtitle(data.subtitle);
           setMascotIcon(data.icon);
           setMascotColor(data.color);
+          const { StorageService } = await import('@/services/storage');
+          await StorageService.saveAgentProfile(data);
         }}
       />
     </SafeAreaView>
