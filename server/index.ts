@@ -4,6 +4,7 @@ import dotenv from 'dotenv';
 import chatRouter from './routes/chat';
 import tasksRouter from './routes/tasks';
 import sessionsRouter from './routes/sessions';
+import feedRouter from './routes/feed';
 import { bbClient } from './services/browserbase';
 
 dotenv.config();
@@ -41,6 +42,7 @@ app.get('/api/health', async (_req, res) => {
 app.use('/api/chat', chatRouter);
 app.use('/api/tasks', tasksRouter);
 app.use('/api/sessions', sessionsRouter);
+app.use('/api/feed', feedRouter);
 
 // Start server
 app.listen(PORT, () => {
@@ -50,5 +52,6 @@ app.listen(PORT, () => {
   console.log(`   • GET  /api/health`);
   console.log(`   • POST /api/chat`);
   console.log(`   • GET  /api/tasks & POST /api/tasks/run`);
-  console.log(`   • GET  /api/sessions\n`);
+  console.log(`   • GET  /api/sessions`);
+  console.log(`   • GET  /api/feed & POST /api/feed/run-idea\n`);
 });

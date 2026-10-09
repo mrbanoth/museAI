@@ -83,6 +83,35 @@ export const ApiService = {
     }
   },
 
+  async getFeed(): Promise<{ success: boolean; feed: any[] }> {
+    try {
+      const res = await fetch(`${API_BASE_URL}/feed`);
+      return await res.json();
+    } catch (err: any) {
+      console.warn('Get feed failed:', err.message);
+      return { success: false, feed: [] };
+    }
+  },
+
+  async runIdea(idea: { id: string; title: string; prompt: string; icon: string }): Promise<any> {
+    try {
+      const res = await fetch(`${API_BASE_URL}/feed/run-idea`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          ideaId: idea.id,
+          title: idea.title,
+          prompt: idea.prompt,
+          icon: idea.icon,
+        }),
+      });
+      return await res.json();
+    } catch (err: any) {
+      console.warn('Run idea failed:', err.message);
+      return { success: false, message: err.message };
+    }
+  },
+
   async listSessions() {
     try {
       const res = await fetch(`${API_BASE_URL}/sessions`);

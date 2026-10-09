@@ -58,6 +58,30 @@ export interface IdeaItem {
 }
 
 /**
+ * Autonomous intelligence feed card item.
+ */
+export interface FeedItem {
+  /** Unique feed item identifier */
+  id: string;
+  /** High-level category or badge name */
+  category: string;
+  /** Bold headline title */
+  title: string;
+  /** Detailed summary paragraph */
+  summary: string;
+  /** Formatted relative timestamp (e.g. "15m ago") */
+  timestamp: string;
+  /** Target crawled source link */
+  sourceUrl?: string;
+  /** Full Browserbase cloud session replay URL */
+  replayUrl?: string;
+  /** Topic or capability tags */
+  tags: string[];
+  /** Emoji emblem */
+  icon: string;
+}
+
+/**
  * Status of scheduled goals or routines.
  */
 export type TaskStatus = 'active' | 'paused' | 'done';
