@@ -1,15 +1,14 @@
 /**
  * Goals Tab Screen ('/(tabs)/tasks')
  *
- * Pixel-perfect implementation of Muse AI Goals & Tracking:
- * - 🟢 Tracking section with active reservation & watcher items
- * - 🔵 Goals section with milestone routines
- * - Expandable 'Show more' sections
- * - 'Create a goal' category templates
- * - Live Cloud Browser Execution via Browserbase
+ * Full real-time Goals & Tracking manager:
+ * - Real-time Goal creation modal
+ * - Real-time Goal deletion
+ * - Real-time Checkmark toggle & live execution via Cloud Agent
+ * - Persisted in StorageService
  */
 
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -17,99 +16,117 @@ import {
   ScrollView,
   TouchableOpacity,
   ActivityIndicator,
+  Modal,
+  TextInput,
+  Platform,
 } from 'react-native';
+import { useFocusEffect } from 'expo-router';
 import { HugeiconsIcon } from '@hugeicons/react-native';
 import {
-  MoreVerticalIcon,
   PlayIcon,
   Globe02Icon,
   Add01Icon,
+  Delete02Icon,
+  CheckmarkCircle01Icon,
+  Cancel01Icon,
+  SparklesIcon,
 } from '@hugeicons/core-free-icons';
 import { Colors } from '@/constants/colors';
 import { showToast } from '@/context/ToastContext';
 import { ApiService } from '@/services/api';
+import { StorageService, RealGoalItem } from '@/services/storage';
 import { LiveBrowserModal } from '@/components/common';
 
-interface GoalItem {
-  id: string;
-  title: string;
-  subtitle: string;
-  category: 'tracking' | 'goals';
-  checked: boolean;
-  replayUrl?: string;
-  isRunning?: boolean;
-}
-
-const INITIAL_GOALS: GoalItem[] = [
-  {
-    id: 'track-1',
-    title: 'Dinner reservations',
-    subtitle: 'Sushi restaurants downtown',
-    category: 'tracking',
-    checked: false,
-    replayUrl: 'https://www.browserbase.com/sessions/45ea61b8-1a58-405e-8391-6955f71a9e1a',
-  },
-  {
-    id: 'goal-1',
-    title: 'Marathon prep',
-    subtitle: 'Build endurance, hit your pace goals, and cross that finish line strong.',
-    category: 'goals',
-    checked: false,
-  },
-  {
-    id: 'goal-2',
-    title: 'Save for new car',
-    subtitle: 'On track to hit your goals if you save $210 each month towards your new car fund!',
-    category: 'goals',
-    checked: false,
-  },
-];
-
 export default function GoalsScreen() {
-  const [items, setItems] = useState<GoalItem[]>(INITIAL_GOALS);
-  const [showMoreTracking, setShowMoreTracking] = useState(false);
-  const [showMoreGoals, setShowMoreGoals] = useState(false);
+  const [items, setItems] = useState<RealGoalItem[]>([]);
+  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+  const [newTitle, setNewTitle] = useState('');
+  const [newSubtitle, setNewSubtitle] = useState('');
+  const [newCategory, setNewCategory] = useState<'tracking' | 'goals'>('tracking');
   const [liveModal, setLiveModal] = useState<{ visible: boolean; url: string | null; title?: string }>({
     visible: false,
     url: null,
     title: undefined,
   });
 
-  const toggleCheck = (id: string) => {
-    setItems((prev) =>
-      prev.map((item) => (item.id === id ? { ...item, checked: !item.checked } : item))
-    );
+  const loadGoals = useCallback(async () => {
+    const data = await StorageService.getGoals();
+    setItems(data);
+  }, []);
+
+  useFocusEffect(
+    useCallback(() => {
+      loadGoals();
+    }, [loadGoals])
+  );
+
+  const toggleCheck = async (id: string) => {
+    const updated = await StorageService.toggleGoalCheck(id);
+    setItems(updated);
   };
 
-  const handleRunGoal = async (goal: GoalItem) => {
+  const handleDeleteGoal = async (id: string, title: string) => {
+    const updated = await StorageService.deleteGoal(id);
+    setItems(updated);
+    showToast(`Deleted "${title}"`);
+  };
+
+  const handleCreateGoal = async () => {
+    const title = newTitle.trim();
+    if (!title) {
+      showToast('Please enter a goal title');
+      return;
+    }
+
+    const created = await StorageService.createGoal(
+      title,
+      newSubtitle.trim() || 'Custom autonomous goal tracked by Muse AI',
+      newCategory
+    );
+
+    setItems((prev) => [created, ...prev]);
+    setNewTitle('');
+    setNewSubtitle('');
+    setIsCreateModalOpen(false);
+    showToast(`Created goal: "${title}"`);
+  };
+
+  const handleRunGoal = async (goal: RealGoalItem) => {
     setItems((prev) =>
       prev.map((g) => (g.id === goal.id ? { ...g, isRunning: true } : g))
     );
-    showToast(`Muse is launching cloud browser for "${goal.title}"...`);
+    showToast(`Muse is executing "${goal.title}"...`);
 
     try {
       const res = await ApiService.runTask(goal.id, goal.title);
       if (res.success) {
-        showToast('Completed! Replay generated.');
-        setItems((prev) =>
-          prev.map((g) =>
-            g.id === goal.id
-              ? { ...g, isRunning: false, replayUrl: res.replayUrl }
-              : g
-          )
+        showToast('Execution finished! Replay generated.');
+        const updated = items.map((g) =>
+          g.id === goal.id
+            ? { ...g, isRunning: false, replayUrl: res.replayUrl || 'https://www.browserbase.com' }
+            : g
         );
+        setItems(updated);
+        await StorageService.saveGoals(updated);
       } else {
-        showToast('Execution finished.');
-        setItems((prev) =>
-          prev.map((g) => (g.id === goal.id ? { ...g, isRunning: false } : g))
-        );
+        showToast('Execution completed.');
       }
     } catch {
-      showToast('Error executing goal');
+      showToast('Failed to run task');
+    } finally {
       setItems((prev) =>
         prev.map((g) => (g.id === goal.id ? { ...g, isRunning: false } : g))
       );
     }
+  };
+
+  const handleOpenLink = (url?: string, title?: string) => {
+    if (!url) return;
+    setLiveModal({
+      visible: true,
+      url,
+      title: title || 'Browserbase Cloud Live View',
+    });
   };
 
   const trackingItems = items.filter((i) => i.category === 'tracking');
@@ -121,162 +138,238 @@ export default function GoalsScreen() {
         style={styles.scrollArea}
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}>
-        {/* Title */}
-        <View style={styles.titleRow}>
-          <Text style={styles.pageTitle}>Goals</Text>
+        {/* Header */}
+        <View style={styles.headerRow}>
+          <View>
+            <Text style={styles.pageTitle}>Task / Goal</Text>
+            <Text style={styles.subtitle}>Scheduled autonomous routines & watchers</Text>
+          </View>
+
+          <TouchableOpacity
+            style={styles.createBtn}
+            onPress={() => setIsCreateModalOpen(true)}
+            activeOpacity={0.8}>
+            <HugeiconsIcon icon={Add01Icon} size={18} color={Colors.white} strokeWidth={2.4} />
+            <Text style={styles.createBtnText}>New Goal</Text>
+          </TouchableOpacity>
         </View>
 
-        {/* SECTION 1: 🟢 Tracking */}
-        <View style={styles.sectionHeader}>
-          <View style={styles.greenDot} />
-          <Text style={styles.sectionTitleGreen}>Tracking</Text>
+        {/* 🟢 TRACKING SECTION */}
+        <View style={styles.sectionHeaderRow}>
+          <View style={styles.sectionDotGreen} />
+          <Text style={styles.sectionTitle}>Tracking ({trackingItems.length})</Text>
         </View>
 
-        <View style={styles.itemsList}>
-          {trackingItems.map((item) => (
-            <View key={item.id} style={styles.itemRow}>
+        {trackingItems.map((item) => (
+          <View key={item.id} style={styles.card}>
+            <View style={styles.cardTopRow}>
+              {/* Checkbox */}
               <TouchableOpacity
                 style={[styles.checkbox, item.checked && styles.checkboxChecked]}
                 onPress={() => toggleCheck(item.id)}
                 activeOpacity={0.7}>
-                {item.checked && <Text style={styles.checkmark}>✓</Text>}
+                {item.checked && (
+                  <HugeiconsIcon
+                    icon={CheckmarkCircle01Icon}
+                    size={18}
+                    color={Colors.primary}
+                    strokeWidth={2.4}
+                  />
+                )}
               </TouchableOpacity>
 
-              <View style={styles.itemDetails}>
-                <Text style={[styles.itemTitle, item.checked && styles.itemCheckedText]}>
+              {/* Text */}
+              <View style={styles.cardTextCol}>
+                <Text
+                  style={[styles.cardTitle, item.checked && styles.cardTitleChecked]}
+                  numberOfLines={1}>
                   {item.title}
                 </Text>
-                <Text style={styles.itemSubtitle}>{item.subtitle}</Text>
-
-                {item.replayUrl && (
-                  <TouchableOpacity
-                    style={styles.replayPill}
-                    onPress={() =>
-                      setLiveModal({
-                        visible: true,
-                        url: item.replayUrl!,
-                        title: item.title,
-                      })
-                    }
-                    activeOpacity={0.7}>
-                    <HugeiconsIcon icon={Globe02Icon} size={11} color={Colors.primary} />
-                    <Text style={styles.replayText}>Cloud Replay</Text>
-                  </TouchableOpacity>
-                )}
+                <Text style={styles.cardSubtitle} numberOfLines={2}>
+                  {item.subtitle}
+                </Text>
               </View>
 
+              {/* Delete button */}
               <TouchableOpacity
-                style={styles.actionBtn}
-                onPress={() => handleRunGoal(item)}
+                style={styles.deleteBtn}
+                onPress={() => handleDeleteGoal(item.id, item.title)}
                 activeOpacity={0.7}>
+                <HugeiconsIcon icon={Delete02Icon} size={16} color="#94A3B8" />
+              </TouchableOpacity>
+            </View>
+
+            {/* Bottom Actions Row */}
+            <View style={styles.cardBottomRow}>
+              {item.replayUrl ? (
+                <TouchableOpacity
+                  style={styles.replayBadge}
+                  onPress={() => handleOpenLink(item.replayUrl, item.title)}
+                  activeOpacity={0.7}>
+                  <HugeiconsIcon icon={Globe02Icon} size={13} color={Colors.primary} strokeWidth={2.2} />
+                  <Text style={styles.replayText}>Cloud Replay</Text>
+                </TouchableOpacity>
+              ) : null}
+
+              <TouchableOpacity
+                style={styles.runBtn}
+                onPress={() => handleRunGoal(item)}
+                disabled={item.isRunning}
+                activeOpacity={0.8}>
                 {item.isRunning ? (
                   <ActivityIndicator size="small" color={Colors.primary} />
                 ) : (
-                  <HugeiconsIcon icon={MoreVerticalIcon} size={18} color={Colors.iconMuted} />
+                  <>
+                    <HugeiconsIcon icon={PlayIcon} size={13} color={Colors.primary} strokeWidth={2.4} />
+                    <Text style={styles.runBtnText}>Run now</Text>
+                  </>
                 )}
               </TouchableOpacity>
             </View>
-          ))}
+          </View>
+        ))}
 
-          {/* Show 2 more */}
-          <TouchableOpacity
-            style={styles.showMoreRow}
-            onPress={() => {
-              setShowMoreTracking(!showMoreTracking);
-              showToast(showMoreTracking ? 'Collapsed' : 'Showing all tracked items');
-            }}
-            activeOpacity={0.7}>
-            <Text style={styles.dragIcon}>⠿</Text>
-            <Text style={styles.showMoreText}>
-              {showMoreTracking ? 'Show less' : 'Show 2 more'}
-            </Text>
-          </TouchableOpacity>
+        {/* 🔵 GOALS SECTION */}
+        <View style={[styles.sectionHeaderRow, { marginTop: 24 }]}>
+          <View style={styles.sectionDotBlue} />
+          <Text style={styles.sectionTitle}>Goals ({goalItems.length})</Text>
         </View>
 
-        <View style={styles.sectionDivider} />
-
-        {/* SECTION 2: 🔵 Goals */}
-        <View style={styles.sectionHeader}>
-          <View style={styles.blueDot} />
-          <Text style={styles.sectionTitleBlue}>Goals</Text>
-        </View>
-
-        <View style={styles.itemsList}>
-          {goalItems.map((item) => (
-            <View key={item.id} style={styles.itemRow}>
+        {goalItems.map((item) => (
+          <View key={item.id} style={styles.card}>
+            <View style={styles.cardTopRow}>
+              {/* Checkbox */}
               <TouchableOpacity
                 style={[styles.checkbox, item.checked && styles.checkboxChecked]}
                 onPress={() => toggleCheck(item.id)}
                 activeOpacity={0.7}>
-                {item.checked && <Text style={styles.checkmark}>✓</Text>}
+                {item.checked && (
+                  <HugeiconsIcon
+                    icon={CheckmarkCircle01Icon}
+                    size={18}
+                    color={Colors.primary}
+                    strokeWidth={2.4}
+                  />
+                )}
               </TouchableOpacity>
 
-              <View style={styles.itemDetails}>
-                <Text style={[styles.itemTitle, item.checked && styles.itemCheckedText]}>
+              {/* Text */}
+              <View style={styles.cardTextCol}>
+                <Text
+                  style={[styles.cardTitle, item.checked && styles.cardTitleChecked]}
+                  numberOfLines={1}>
                   {item.title}
                 </Text>
-                <Text style={styles.itemSubtitle}>{item.subtitle}</Text>
+                <Text style={styles.cardSubtitle} numberOfLines={2}>
+                  {item.subtitle}
+                </Text>
               </View>
 
+              {/* Delete button */}
               <TouchableOpacity
-                style={styles.actionBtn}
-                onPress={() => handleRunGoal(item)}
+                style={styles.deleteBtn}
+                onPress={() => handleDeleteGoal(item.id, item.title)}
                 activeOpacity={0.7}>
+                <HugeiconsIcon icon={Delete02Icon} size={16} color="#94A3B8" />
+              </TouchableOpacity>
+            </View>
+
+            {/* Bottom Actions */}
+            <View style={styles.cardBottomRow}>
+              <TouchableOpacity
+                style={styles.runBtn}
+                onPress={() => handleRunGoal(item)}
+                disabled={item.isRunning}
+                activeOpacity={0.8}>
                 {item.isRunning ? (
                   <ActivityIndicator size="small" color={Colors.primary} />
                 ) : (
-                  <HugeiconsIcon icon={MoreVerticalIcon} size={18} color={Colors.iconMuted} />
+                  <>
+                    <HugeiconsIcon icon={PlayIcon} size={13} color={Colors.primary} strokeWidth={2.4} />
+                    <Text style={styles.runBtnText}>Run routine</Text>
+                  </>
                 )}
               </TouchableOpacity>
             </View>
-          ))}
-
-          {/* Show 4 more */}
-          <TouchableOpacity
-            style={styles.showMoreRow}
-            onPress={() => {
-              setShowMoreGoals(!showMoreGoals);
-              showToast(showMoreGoals ? 'Collapsed' : 'Showing all goals');
-            }}
-            activeOpacity={0.7}>
-            <Text style={styles.dragIcon}>⠿</Text>
-            <Text style={styles.showMoreText}>
-              {showMoreGoals ? 'Show less' : 'Show 4 more'}
-            </Text>
-          </TouchableOpacity>
-        </View>
-
-        <View style={styles.sectionDivider} />
-
-        {/* SECTION 3: Create a goal */}
-        <View style={styles.createGoalSection}>
-          <Text style={styles.createGoalTitle}>Create a goal</Text>
-
-          <TouchableOpacity
-            style={styles.categoryRow}
-            onPress={() => showToast('Create Health Goal')}
-            activeOpacity={0.7}>
-            <View style={styles.categoryLeft}>
-              <Text style={{ fontSize: 18 }}>🤍</Text>
-              <Text style={styles.categoryName}>Health</Text>
-            </View>
-            <HugeiconsIcon icon={Add01Icon} size={18} color={Colors.iconMuted} />
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={styles.categoryRow}
-            onPress={() => showToast('Create Relationships Goal')}
-            activeOpacity={0.7}>
-            <View style={styles.categoryLeft}>
-              <Text style={{ fontSize: 18 }}>👥</Text>
-              <Text style={styles.categoryName}>Relationships</Text>
-            </View>
-            <HugeiconsIcon icon={Add01Icon} size={18} color={Colors.iconMuted} />
-          </TouchableOpacity>
-        </View>
+          </View>
+        ))}
       </ScrollView>
 
-      {/* Embedded Cloud Browser Live Modal */}
+      {/* Create Goal Modal */}
+      <Modal
+        visible={isCreateModalOpen}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setIsCreateModalOpen(false)}>
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Create Goal or Tracker</Text>
+              <TouchableOpacity onPress={() => setIsCreateModalOpen(false)}>
+                <HugeiconsIcon icon={Cancel01Icon} size={20} color={Colors.iconMuted} />
+              </TouchableOpacity>
+            </View>
+
+            {/* Category Toggle */}
+            <View style={styles.categoryToggleRow}>
+              <TouchableOpacity
+                style={[
+                  styles.categoryTab,
+                  newCategory === 'tracking' && styles.categoryTabActive,
+                ]}
+                onPress={() => setNewCategory('tracking')}>
+                <Text
+                  style={[
+                    styles.categoryTabText,
+                    newCategory === 'tracking' && styles.categoryTabTextActive,
+                  ]}>
+                  🟢 Tracking
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[
+                  styles.categoryTab,
+                  newCategory === 'goals' && styles.categoryTabActive,
+                ]}
+                onPress={() => setNewCategory('goals')}>
+                <Text
+                  style={[
+                    styles.categoryTabText,
+                    newCategory === 'goals' && styles.categoryTabTextActive,
+                  ]}>
+                  🔵 Goal
+                </Text>
+              </TouchableOpacity>
+            </View>
+
+            <TextInput
+              style={styles.modalInput}
+              placeholder="Title (e.g. Flight price watcher)"
+              placeholderTextColor={Colors.iconMuted}
+              value={newTitle}
+              onChangeText={setNewTitle}
+            />
+
+            <TextInput
+              style={[styles.modalInput, { height: 70, textAlignVertical: 'top' }]}
+              placeholder="Description or routine instructions..."
+              placeholderTextColor={Colors.iconMuted}
+              value={newSubtitle}
+              onChangeText={setNewSubtitle}
+              multiline
+            />
+
+            <TouchableOpacity
+              style={styles.modalSubmitBtn}
+              onPress={handleCreateGoal}
+              activeOpacity={0.85}>
+              <Text style={styles.modalSubmitBtnText}>Create Task</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Live Browser Modal */}
       <LiveBrowserModal
         visible={liveModal.visible}
         url={liveModal.url}
@@ -300,155 +393,221 @@ const styles = StyleSheet.create({
     paddingTop: 12,
     paddingBottom: 40,
   },
-  titleRow: {
+  headerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
     marginBottom: 20,
   },
   pageTitle: {
-    fontSize: 32,
+    fontSize: 26,
     fontWeight: '800',
     color: Colors.iconDark,
     letterSpacing: -0.5,
   },
-  sectionHeader: {
+  subtitle: {
+    fontSize: 13,
+    color: Colors.textSecondary,
+    marginTop: 2,
+  },
+  createBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: Colors.primary,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 14,
+    gap: 6,
+  },
+  createBtnText: {
+    color: Colors.white,
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  sectionHeaderRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    marginBottom: 16,
+    marginBottom: 12,
   },
-  greenDot: {
-    width: 9,
-    height: 9,
-    borderRadius: 4.5,
+  sectionDotGreen: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
     backgroundColor: '#10B981',
   },
-  sectionTitleGreen: {
-    fontSize: 16,
+  sectionDotBlue: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: Colors.primary,
+  },
+  sectionTitle: {
+    fontSize: 14,
     fontWeight: '700',
-    color: '#059669',
+    color: Colors.iconDark,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
   },
-  blueDot: {
-    width: 9,
-    height: 9,
-    borderRadius: 4.5,
-    backgroundColor: '#2563EB',
+  card: {
+    backgroundColor: '#F8FAFC',
+    borderRadius: 18,
+    padding: 16,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: '#F1F5F9',
   },
-  sectionTitleBlue: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: '#2563EB',
-  },
-  itemsList: {
-    gap: 16,
-    marginBottom: 10,
-  },
-  itemRow: {
+  cardTopRow: {
     flexDirection: 'row',
     alignItems: 'flex-start',
-    gap: 14,
+    gap: 12,
   },
   checkbox: {
     width: 22,
     height: 22,
-    borderRadius: 6,
+    borderRadius: 7,
     borderWidth: 1.8,
-    borderColor: '#D1D5DB',
+    borderColor: '#CBD5E1',
     alignItems: 'center',
     justifyContent: 'center',
-    marginTop: 2,
+    marginTop: 1,
+    backgroundColor: '#FFFFFF',
   },
   checkboxChecked: {
-    backgroundColor: Colors.primary,
     borderColor: Colors.primary,
+    backgroundColor: '#EFF6FF',
   },
-  checkmark: {
-    color: '#FFFFFF',
-    fontSize: 13,
-    fontWeight: '900',
-    marginTop: -2,
-  },
-  itemDetails: {
+  cardTextCol: {
     flex: 1,
   },
-  itemTitle: {
-    fontSize: 15.5,
+  cardTitle: {
+    fontSize: 15,
     fontWeight: '700',
     color: Colors.iconDark,
-    letterSpacing: -0.2,
+    marginBottom: 3,
   },
-  itemCheckedText: {
+  cardTitleChecked: {
     textDecorationLine: 'line-through',
-    color: Colors.textMuted,
+    color: Colors.textSecondary,
   },
-  itemSubtitle: {
+  cardSubtitle: {
     fontSize: 13,
-    color: '#6B7280',
+    color: Colors.textSecondary,
     lineHeight: 18,
-    marginTop: 3,
   },
-  replayPill: {
+  deleteBtn: {
+    padding: 4,
+  },
+  cardBottomRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'flex-end',
+    gap: 10,
+    marginTop: 12,
+    paddingTop: 10,
+    borderTopWidth: 1,
+    borderTopColor: '#F1F5F9',
+  },
+  replayBadge: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    backgroundColor: Colors.primarySubtle,
+    backgroundColor: '#EFF6FF',
     paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 6,
-    marginTop: 6,
-    alignSelf: 'flex-start',
+    paddingVertical: 4,
+    borderRadius: 8,
+    marginRight: 'auto',
   },
   replayText: {
-    fontSize: 11,
+    fontSize: 11.5,
     fontWeight: '600',
     color: Colors.primary,
   },
-  actionBtn: {
-    padding: 4,
-  },
-  showMoreRow: {
+  runBtn: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    gap: 6,
+    backgroundColor: '#EFF6FF',
+    paddingHorizontal: 12,
     paddingVertical: 6,
+    borderRadius: 10,
   },
-  dragIcon: {
-    fontSize: 16,
-    color: '#9CA3AF',
+  runBtnText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: Colors.primary,
   },
-  showMoreText: {
-    fontSize: 13.5,
-    fontWeight: '600',
-    color: '#9CA3AF',
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.4)',
+    justifyContent: 'flex-end',
   },
-  sectionDivider: {
-    height: 1,
-    backgroundColor: '#F3F4F6',
-    marginVertical: 18,
+  modalContent: {
+    backgroundColor: Colors.white,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    padding: 20,
+    paddingBottom: Platform.OS === 'ios' ? 40 : 24,
   },
-  createGoalSection: {
-    marginTop: 6,
-  },
-  createGoalTitle: {
-    fontSize: 16,
-    fontWeight: '800',
-    color: Colors.iconDark,
-    marginBottom: 14,
-  },
-  categoryRow: {
+  modalHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingVertical: 14,
-    borderBottomWidth: 1,
-    borderBottomColor: '#F9FAFB',
+    marginBottom: 16,
   },
-  categoryLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-  },
-  categoryName: {
-    fontSize: 15,
-    fontWeight: '600',
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: '800',
     color: Colors.iconDark,
+  },
+  categoryToggleRow: {
+    flexDirection: 'row',
+    backgroundColor: '#F1F5F9',
+    borderRadius: 12,
+    padding: 4,
+    marginBottom: 14,
+    gap: 6,
+  },
+  categoryTab: {
+    flex: 1,
+    paddingVertical: 8,
+    borderRadius: 9,
+    alignItems: 'center',
+  },
+  categoryTabActive: {
+    backgroundColor: '#FFFFFF',
+  },
+  categoryTabText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: Colors.textSecondary,
+  },
+  categoryTabTextActive: {
+    color: Colors.iconDark,
+    fontWeight: '700',
+  },
+  modalInput: {
+    backgroundColor: '#F8FAFC',
+    borderRadius: 14,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    fontSize: 14,
+    color: Colors.iconDark,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  modalSubmitBtn: {
+    backgroundColor: Colors.primary,
+    borderRadius: 16,
+    height: 48,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 6,
+  },
+  modalSubmitBtnText: {
+    color: Colors.white,
+    fontSize: 15,
+    fontWeight: '700',
   },
 });

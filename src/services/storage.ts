@@ -1,5 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { ChatMessage, TaskGoalItem, AgentProfile, ChatSession } from '@/types';
+import { ChatMessage, TaskGoalItem, AgentProfile, ChatSession, ConnectorItem } from '@/types';
 
 const KEYS = {
   CHAT_SESSIONS: '@muse_ai:chat_sessions',
@@ -7,9 +7,11 @@ const KEYS = {
   TASKS: '@muse_ai:tasks',
   AGENT_PROFILE: '@muse_ai:agent_profile',
   USER_AUTH: '@muse_ai:user_auth',
+  CONNECTORS: '@muse_ai:connectors',
+  GOALS: '@muse_ai:goals',
 };
 
-// Resilient memory cache fallback if native storage bridge is unavailable
+// Global in-memory cache to guarantee zero storage latency and seamless offline/native fallback
 const memoryStore: Record<string, string> = {};
 
 const safeStorage = {
@@ -39,12 +41,133 @@ const safeStorage = {
   },
 };
 
-const DEFAULT_GREETING: ChatMessage = {
-  id: 'greeting-msg',
-  sender: 'agent',
-  text: "Hello! I'm Muse, your autonomous AI companion. I can research topics, navigate live cloud browsers, execute scheduled goals, and analyze files.\n\nHow can I help you today?",
-  timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-};
+const DEFAULT_CONNECTORS: ConnectorItem[] = [
+  {
+    id: 'gmail',
+    name: 'Gmail',
+    description: 'Autonomous email triage, draft replies, and confirmation extraction',
+    iconBg: '#EA4335',
+    connected: true,
+    category: 'Productivity',
+    accountEmail: 'user@gmail.com',
+  },
+  {
+    id: 'gcal',
+    name: 'Google Calendar',
+    description: 'Sync scheduled routines and automated event reminders',
+    iconBg: '#4285F4',
+    connected: true,
+    category: 'Productivity',
+    accountEmail: 'user@gmail.com',
+  },
+  {
+    id: 'healthex',
+    name: 'HealthEx',
+    description: 'VO2 max, daily endurance, and marathon pacing insights',
+    iconBg: '#F59E0B',
+    connected: true,
+    category: 'Health',
+  },
+  {
+    id: 'opentable',
+    name: 'OpenTable',
+    description: 'Automated dining reservations and table seat tracking',
+    iconBg: '#DA3743',
+    connected: true,
+    category: 'Lifestyle',
+  },
+  {
+    id: 'facebook',
+    name: 'Facebook',
+    description: 'Marketplace alerts for deals and item tracking',
+    iconBg: '#1877F2',
+    connected: true,
+    category: 'Social',
+  },
+  {
+    id: 'instagram',
+    name: 'Instagram',
+    description: 'Saved places and restaurant recommendation tracking',
+    iconBg: '#E1306C',
+    connected: true,
+    category: 'Social',
+  },
+  {
+    id: 'peloton',
+    name: 'Peloton',
+    description: 'Workout cadence and daily recovery metrics',
+    iconBg: '#1E2022',
+    connected: true,
+    category: 'Fitness',
+  },
+  {
+    id: 'plaid',
+    name: 'Finances (Plaid)',
+    description: 'Bank statements, recurring subscription tracking & spending alerts',
+    iconBg: '#111827',
+    connected: false,
+    category: 'Finance',
+  },
+  {
+    id: 'github',
+    name: 'GitHub',
+    description: 'Repository watchers, issue tracking, and automated pull requests',
+    iconBg: '#24292E',
+    connected: false,
+    category: 'Developer',
+  },
+  {
+    id: 'notion',
+    name: 'Notion',
+    description: 'Sync workspace notes, project databases, and task backlogs',
+    iconBg: '#000000',
+    connected: false,
+    category: 'Workspace',
+  },
+  {
+    id: 'slack',
+    name: 'Slack',
+    description: 'Team updates and autonomous notification summaries',
+    iconBg: '#4A154B',
+    connected: false,
+    category: 'Workspace',
+  },
+];
+
+export interface RealGoalItem {
+  id: string;
+  title: string;
+  subtitle: string;
+  category: 'tracking' | 'goals';
+  checked: boolean;
+  replayUrl?: string;
+  isRunning?: boolean;
+}
+
+const DEFAULT_GOALS: RealGoalItem[] = [
+  {
+    id: 'track-1',
+    title: 'Dinner reservations',
+    subtitle: 'Sushi restaurants downtown with 7:30 PM availability',
+    category: 'tracking',
+    checked: false,
+    replayUrl: 'https://www.browserbase.com',
+  },
+  {
+    id: 'goal-1',
+    title: 'Marathon prep',
+    subtitle: 'Build endurance, hit pace goals, and cross that finish line strong.',
+    category: 'goals',
+    checked: false,
+  },
+  {
+    id: 'goal-2',
+    title: 'Save for new car',
+    subtitle: 'On track to hit your goals if you save $210 each month towards your car fund!',
+    category: 'goals',
+    checked: false,
+  },
+];
 
 export const StorageService = {
   // Chat Sessions
@@ -54,11 +177,10 @@ export const StorageService = {
       if (data) {
         return JSON.parse(data);
       }
-      // Create initial clean session if none exists
       const initialSession: ChatSession = {
         id: 'main-chat',
         title: 'Main chat',
-        messages: [DEFAULT_GREETING],
+        messages: [],
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
       };
@@ -69,7 +191,7 @@ export const StorageService = {
         {
           id: 'main-chat',
           title: 'Main chat',
-          messages: [DEFAULT_GREETING],
+          messages: [],
           createdAt: new Date().toISOString(),
           updatedAt: new Date().toISOString(),
         },
@@ -169,34 +291,75 @@ export const StorageService = {
     await safeStorage.setItem(KEYS.CHAT_SESSIONS, JSON.stringify(updated));
   },
 
-  // Legacy helper
-  async getChatMessages(): Promise<ChatMessage[]> {
-    const activeId = await this.getActiveSessionId();
-    return this.getSessionMessages(activeId);
-  },
-
-  async saveChatMessages(messages: ChatMessage[]): Promise<void> {
-    const activeId = await this.getActiveSessionId();
-    await this.saveSessionMessages(activeId, messages);
-  },
-
-  // Tasks & Goals
-  async getTasks(): Promise<TaskGoalItem[]> {
+  // Connectors
+  async getConnectors(): Promise<ConnectorItem[]> {
     try {
-      const data = await safeStorage.getItem(KEYS.TASKS);
+      const data = await safeStorage.getItem(KEYS.CONNECTORS);
       if (data) {
         return JSON.parse(data);
       }
-      return [];
+      await safeStorage.setItem(KEYS.CONNECTORS, JSON.stringify(DEFAULT_CONNECTORS));
+      return DEFAULT_CONNECTORS;
     } catch {
-      return [];
+      return DEFAULT_CONNECTORS;
     }
   },
 
-  async saveTasks(tasks: TaskGoalItem[]): Promise<void> {
+  async toggleConnector(id: string): Promise<ConnectorItem[]> {
+    const current = await this.getConnectors();
+    const updated = current.map((c) => (c.id === id ? { ...c, connected: !c.connected } : c));
+    await safeStorage.setItem(KEYS.CONNECTORS, JSON.stringify(updated));
+    return updated;
+  },
+
+  async saveConnectors(connectors: ConnectorItem[]): Promise<void> {
+    await safeStorage.setItem(KEYS.CONNECTORS, JSON.stringify(connectors));
+  },
+
+  // Goals & Tracking
+  async getGoals(): Promise<RealGoalItem[]> {
     try {
-      await safeStorage.setItem(KEYS.TASKS, JSON.stringify(tasks));
-    } catch {}
+      const data = await safeStorage.getItem(KEYS.GOALS);
+      if (data) {
+        return JSON.parse(data);
+      }
+      await safeStorage.setItem(KEYS.GOALS, JSON.stringify(DEFAULT_GOALS));
+      return DEFAULT_GOALS;
+    } catch {
+      return DEFAULT_GOALS;
+    }
+  },
+
+  async createGoal(title: string, subtitle: string, category: 'tracking' | 'goals'): Promise<RealGoalItem> {
+    const current = await this.getGoals();
+    const newGoal: RealGoalItem = {
+      id: `goal-${Date.now()}`,
+      title,
+      subtitle,
+      category,
+      checked: false,
+    };
+    const updated = [newGoal, ...current];
+    await safeStorage.setItem(KEYS.GOALS, JSON.stringify(updated));
+    return newGoal;
+  },
+
+  async deleteGoal(id: string): Promise<RealGoalItem[]> {
+    const current = await this.getGoals();
+    const filtered = current.filter((g) => g.id !== id);
+    await safeStorage.setItem(KEYS.GOALS, JSON.stringify(filtered));
+    return filtered;
+  },
+
+  async toggleGoalCheck(id: string): Promise<RealGoalItem[]> {
+    const current = await this.getGoals();
+    const updated = current.map((g) => (g.id === id ? { ...g, checked: !g.checked } : g));
+    await safeStorage.setItem(KEYS.GOALS, JSON.stringify(updated));
+    return updated;
+  },
+
+  async saveGoals(goals: RealGoalItem[]): Promise<void> {
+    await safeStorage.setItem(KEYS.GOALS, JSON.stringify(goals));
   },
 
   // Agent Profile Customization
@@ -210,22 +373,17 @@ export const StorageService = {
 
     try {
       const data = await safeStorage.getItem(KEYS.AGENT_PROFILE);
-      if (data) {
-        return JSON.parse(data);
-      }
-      return defaultProfile;
+      return data ? JSON.parse(data) : defaultProfile;
     } catch {
       return defaultProfile;
     }
   },
 
   async saveAgentProfile(profile: AgentProfile): Promise<void> {
-    try {
-      await safeStorage.setItem(KEYS.AGENT_PROFILE, JSON.stringify(profile));
-    } catch {}
+    await safeStorage.setItem(KEYS.AGENT_PROFILE, JSON.stringify(profile));
   },
 
-  // User Auth State
+  // User Auth State & Avatar
   async getUserAuth(): Promise<{ signedIn: boolean; email?: string; name?: string; avatar?: string; userId?: string } | null> {
     try {
       const data = await safeStorage.getItem(KEYS.USER_AUTH);
@@ -236,14 +394,27 @@ export const StorageService = {
   },
 
   async saveUserAuth(user: { signedIn: boolean; email?: string; name?: string; avatar?: string; userId?: string }): Promise<void> {
-    try {
-      await safeStorage.setItem(KEYS.USER_AUTH, JSON.stringify(user));
-    } catch {}
+    await safeStorage.setItem(KEYS.USER_AUTH, JSON.stringify(user));
+  },
+
+  async updateUserAvatar(avatarUri: string | null): Promise<void> {
+    const current = await this.getUserAuth();
+    if (current) {
+      await this.saveUserAuth({
+        ...current,
+        avatar: avatarUri || undefined,
+      });
+    } else {
+      await this.saveUserAuth({
+        signedIn: true,
+        name: 'User',
+        email: 'user@muse.ai',
+        avatar: avatarUri || undefined,
+      });
+    }
   },
 
   async clearUserAuth(): Promise<void> {
-    try {
-      await safeStorage.removeItem(KEYS.USER_AUTH);
-    } catch {}
+    await safeStorage.removeItem(KEYS.USER_AUTH);
   },
 };

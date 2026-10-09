@@ -12,4 +12,5 @@ export { FinanceCard, type FinanceCardProps } from './FinanceCard';
 export { BrowserCard, type BrowserCardProps } from './BrowserCard';
 export { CheckoutCard, type CheckoutCardProps } from './CheckoutCard';
 export { DocumentCard, type DocumentCardProps } from './DocumentCard';
+export { BrandLogoIcon, type BrandLogoIconProps } from './BrandLogoIcon';
 

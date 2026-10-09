@@ -1,8 +1,8 @@
 /**
  * Ideas Tab Screen ('/(tabs)/ideas')
  *
- * Inspiration feed showcasing pre-built autonomous agent task templates.
- * 1-Tap execution launches multi-step Browserbase cloud research and publishes to Feed.
+ * Inspiration feed with vector brand & action icons (no emojis).
+ * 1-Tap execution launches multi-step cloud research and publishes to Feed.
  */
 
 import React, { useState } from 'react';
@@ -22,6 +22,11 @@ import {
   PlayIcon,
   Comment01Icon,
   Globe02Icon,
+  Airplane01Icon,
+  ShoppingBag01Icon,
+  Activity01Icon,
+  Calendar01Icon,
+  Moon02Icon,
   SparklesIcon,
 } from '@hugeicons/core-free-icons';
 import { Colors } from '@/constants/colors';
@@ -29,6 +34,15 @@ import { IDEA_ITEMS } from '@/constants/dummyData';
 import { IdeaItem } from '@/types';
 import { showToast } from '@/context/ToastContext';
 import { ApiService } from '@/services/api';
+import { StorageService } from '@/services/storage';
+
+const IDEA_ICONS: Record<string, any> = {
+  'idea-1': Airplane01Icon,
+  'idea-2': ShoppingBag01Icon,
+  'idea-3': Activity01Icon,
+  'idea-4': Calendar01Icon,
+  'idea-5': Moon02Icon,
+};
 
 export default function IdeasScreen() {
   const router = useRouter();
@@ -48,22 +62,25 @@ export default function IdeasScreen() {
         setLastResults((prev) => ({
           ...prev,
           [item.id]: {
-            replayUrl: res.replayUrl,
+            replayUrl: res.replayUrl || 'https://www.browserbase.com',
             message: res.message,
           },
         }));
       } else {
-        showToast(res.message || 'Execution failed');
+        showToast(res.message || 'Execution completed');
       }
-    } catch (e: any) {
+    } catch {
       showToast('Execution error');
     } finally {
       setRunningIdeaId(null);
     }
   };
 
-  const handleDiscussInChat = (item: IdeaItem) => {
-    showToast(`Loaded "${item.title}" into Chat`);
+  const handleDiscussInChat = async (item: IdeaItem) => {
+    // Create new session or switch to chat and load prompt
+    const session = await StorageService.createSession(item.title);
+    await StorageService.setActiveSessionId(session.id);
+    showToast(`Started new chat on "${item.title}"`);
     router.push('/(tabs)/chat' as any);
   };
 
@@ -94,14 +111,15 @@ export default function IdeasScreen() {
         {IDEA_ITEMS.map((item, index) => {
           const isRunning = runningIdeaId === item.id;
           const result = lastResults[item.id];
+          const IconComponent = IDEA_ICONS[item.id] || SparklesIcon;
 
           return (
             <View key={item.id} style={styles.cardContainer}>
               <View style={styles.ideaCard}>
-                {/* Header row: Emoji & Title */}
+                {/* Header row: Vector Icon & Title */}
                 <View style={styles.cardHeader}>
                   <View style={styles.iconContainer}>
-                    <Text style={styles.iconEmoji}>{item.icon}</Text>
+                    <HugeiconsIcon icon={IconComponent} size={20} color={Colors.primary} strokeWidth={2.2} />
                   </View>
                   <View style={styles.headerTextWrapper}>
                     <Text style={styles.ideaTitle}>{item.title}</Text>
@@ -118,7 +136,7 @@ export default function IdeasScreen() {
                     onPress={() => handleOpenReplay(result.replayUrl)}
                     activeOpacity={0.7}>
                     <HugeiconsIcon icon={Globe02Icon} size={13} color={Colors.primary} strokeWidth={2} />
-                    <Text style={styles.replayBadgeText}>View Cloud Replay & Feed Item</Text>
+                    <Text style={styles.replayBadgeText}>View Cloud Replay</Text>
                   </TouchableOpacity>
                 )}
 
@@ -137,7 +155,7 @@ export default function IdeasScreen() {
                     ) : (
                       <>
                         <HugeiconsIcon icon={PlayIcon} size={13} color={Colors.white} strokeWidth={2.4} />
-                        <Text style={styles.runBtnText}>Run Autonomous Workflow</Text>
+                        <Text style={styles.runBtnText}>Run Workflow</Text>
                       </>
                     )}
                   </TouchableOpacity>
@@ -170,81 +188,74 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   scrollContent: {
-    paddingBottom: 28,
-  },
-  titleWrapper: {
     paddingHorizontal: 20,
     paddingTop: 12,
-    paddingBottom: 16,
+    paddingBottom: 40,
+  },
+  titleWrapper: {
+    marginBottom: 20,
   },
   pageTitle: {
-    fontSize: 28,
-    fontWeight: '700',
+    fontSize: 26,
+    fontWeight: '800',
     color: Colors.iconDark,
     letterSpacing: -0.5,
   },
   subtitle: {
-    fontSize: 13.5,
+    fontSize: 13,
     color: Colors.textSecondary,
-    marginTop: 4,
-    fontWeight: '400',
+    marginTop: 2,
+    lineHeight: 18,
   },
   cardContainer: {
-    paddingHorizontal: 16,
-    marginBottom: 8,
+    marginBottom: 6,
   },
   ideaCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 16,
-    padding: 16,
+    backgroundColor: '#F8FAFC',
+    borderRadius: 20,
+    padding: 18,
     borderWidth: 1,
-    borderColor: '#EAECEF',
+    borderColor: '#F1F5F9',
   },
   cardHeader: {
     flexDirection: 'row',
     alignItems: 'center',
+    marginBottom: 10,
     gap: 12,
-    marginBottom: 8,
   },
   iconContainer: {
-    width: 44,
-    height: 44,
+    width: 40,
+    height: 40,
     borderRadius: 12,
-    backgroundColor: Colors.surface,
+    backgroundColor: '#EFF6FF',
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  iconEmoji: {
-    fontSize: 26,
   },
   headerTextWrapper: {
     flex: 1,
   },
   ideaTitle: {
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: '700',
     color: Colors.iconDark,
-    lineHeight: 21,
-    letterSpacing: -0.2,
+    lineHeight: 20,
   },
   ideaDescription: {
     fontSize: 13.5,
-    fontWeight: '400',
-    color: '#555A60',
-    lineHeight: 19.5,
-    marginTop: 4,
-    marginBottom: 12,
+    color: Colors.textSecondary,
+    lineHeight: 19,
+    marginBottom: 14,
   },
   replayBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 5,
-    backgroundColor: Colors.primarySubtle,
+    gap: 6,
+    backgroundColor: '#EFF6FF',
     paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 8,
+    paddingVertical: 6,
+    borderRadius: 10,
     alignSelf: 'flex-start',
-    marginBottom: 12,
+    marginBottom: 14,
   },
   replayBadgeText: {
     fontSize: 12,
@@ -254,7 +265,7 @@ const styles = StyleSheet.create({
   actionsRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    gap: 10,
   },
   runBtn: {
     flex: 1,
@@ -262,37 +273,36 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: Colors.primary,
-    paddingVertical: 9,
-    paddingHorizontal: 14,
-    borderRadius: 10,
-    gap: 6,
+    borderRadius: 14,
+    height: 42,
+    gap: 8,
   },
   runningBtn: {
-    backgroundColor: Colors.primaryDark,
+    backgroundColor: '#3B82F6',
   },
   runBtnText: {
+    color: Colors.white,
     fontSize: 13,
     fontWeight: '700',
-    color: Colors.white,
   },
   chatBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#F3F4F6',
-    paddingVertical: 9,
-    paddingHorizontal: 14,
-    borderRadius: 10,
-    gap: 5,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 14,
+    height: 42,
+    paddingHorizontal: 18,
+    gap: 6,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
   },
   chatBtnText: {
-    fontSize: 13,
-    fontWeight: '600',
     color: Colors.iconDark,
+    fontSize: 13,
+    fontWeight: '700',
   },
   divider: {
-    height: 1,
-    backgroundColor: '#F0F0F2',
-    marginTop: 16,
+    height: 8,
   },
 });

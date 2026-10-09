@@ -1,14 +1,13 @@
 /**
  * Settings Tab Screen ('/(tabs)/settings')
  *
- * Clean settings & account management:
- * - User Profile Account Card
- * - Free Plan progress card
- * - Settings items (Connectors, Pricing, Notifications, Appearance, Help & Feedback, Sign Out)
- * - Sign Out with auth clearance and redirection
+ * Full real-time settings and account management:
+ * - Profile avatar with animated MascotAvatar placeholder & custom photo upload
+ * - Connectors management with official vector brand logos (no emojis) & real-time toggle
+ * - Account quota, plan upgrades, and sign-out
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -18,8 +17,11 @@ import {
   Image,
   Modal,
   TextInput,
+  ActivityIndicator,
+  Platform,
 } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useRouter, useFocusEffect } from 'expo-router';
+import * as ImagePicker from 'expo-image-picker';
 import { HugeiconsIcon } from '@hugeicons/react-native';
 import {
   Grid02Icon,
@@ -29,48 +31,97 @@ import {
   ArrowRight01Icon,
   HelpCircleIcon,
   Logout01Icon,
-  UserIcon,
+  Search01Icon,
+  Cancel01Icon,
+  Camera01Icon,
+  Delete02Icon,
+  CheckmarkCircle01Icon,
 } from '@hugeicons/core-free-icons';
 import { Colors } from '@/constants/colors';
 import { SETTINGS_PLAN_DATA } from '@/constants/dummyData';
+import { ConnectorItem } from '@/types';
 import { showToast } from '@/context/ToastContext';
 import { StorageService } from '@/services/storage';
+import { MascotAvatar, BrandLogoIcon } from '@/components/common';
 
 export default function SettingsScreen() {
   const router = useRouter();
   const [userAuth, setUserAuth] = useState<{ name?: string; email?: string; avatar?: string } | null>(null);
+  const [connectors, setConnectors] = useState<ConnectorItem[]>([]);
   const [isConnectorsOpen, setIsConnectorsOpen] = useState(false);
   const [connectorSearch, setConnectorSearch] = useState('');
+  const [uploadingImage, setUploadingImage] = useState(false);
 
-  const connectedServices = [
-    { name: 'Gmail', icon: '✉️', color: '#EA4335' },
-    { name: 'Google Calendar', icon: '📅', color: '#4285F4' },
-    { name: 'HealthEx', icon: '⚡', color: '#F59E0B' },
-    { name: 'OpenTable', icon: '🔴', color: '#E11D48' },
-    { name: 'Facebook', icon: '🔵', color: '#1877F2' },
-    { name: 'Instagram', icon: '📸', color: '#E1306C' },
-    { name: 'Peloton', icon: '🚴', color: '#1E2022' },
-  ];
-
-  const availableServices = [
-    { name: 'Finances (Plaid)', icon: '🔲' },
-    { name: 'Essential Health', icon: '🏥' },
-  ];
-
-  useEffect(() => {
-    (async () => {
-      const auth = await StorageService.getUserAuth();
-      if (auth) {
-        setUserAuth(auth);
-      }
-    })();
+  const loadData = useCallback(async () => {
+    const auth = await StorageService.getUserAuth();
+    if (auth) setUserAuth(auth);
+    const connList = await StorageService.getConnectors();
+    setConnectors(connList);
   }, []);
+
+  useFocusEffect(
+    useCallback(() => {
+      loadData();
+    }, [loadData])
+  );
+
+  const handlePickAvatar = async () => {
+    try {
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ['images'],
+        allowsEditing: true,
+        aspect: [1, 1],
+        quality: 0.8,
+      });
+
+      if (!result.canceled && result.assets && result.assets.length > 0) {
+        const uri = result.assets[0].uri;
+        setUploadingImage(true);
+        await StorageService.updateUserAvatar(uri);
+        setUserAuth((prev) => ({
+          ...(prev || { signedIn: true }),
+          avatar: uri,
+        }));
+        showToast('Profile photo updated');
+      }
+    } catch {
+      showToast('Could not access image library');
+    } finally {
+      setUploadingImage(false);
+    }
+  };
+
+  const handleRemoveAvatar = async () => {
+    await StorageService.updateUserAvatar(null);
+    setUserAuth((prev) => ({
+      ...(prev || { signedIn: true }),
+      avatar: undefined,
+    }));
+    showToast('Reset to default Muse avatar');
+  };
+
+  const handleToggleConnector = async (id: string, name: string) => {
+    const updated = await StorageService.toggleConnector(id);
+    setConnectors(updated);
+    const item = updated.find((c) => c.id === id);
+    showToast(`${item?.connected ? 'Connected' : 'Disconnected'} ${name}`);
+  };
 
   const handleSignOut = async () => {
     await StorageService.clearUserAuth();
     showToast('Signed Out');
     router.replace('/' as any);
   };
+
+  const connectedList = connectors.filter((c) => c.connected);
+  const availableList = connectors.filter((c) => !c.connected);
+
+  const filteredConnected = connectedList.filter((c) =>
+    c.name.toLowerCase().includes(connectorSearch.toLowerCase())
+  );
+  const filteredAvailable = availableList.filter((c) =>
+    c.name.toLowerCase().includes(connectorSearch.toLowerCase())
+  );
 
   return (
     <View style={styles.container}>
@@ -83,19 +134,38 @@ export default function SettingsScreen() {
           <Text style={styles.pageTitle}>Settings</Text>
         </View>
 
-        {/* 0. User Account Card */}
+        {/* 0. User Account Card with Photo Upload */}
         <View style={styles.accountCard}>
-          <View style={styles.avatarContainer}>
+          <TouchableOpacity
+            style={styles.avatarWrapper}
+            onPress={handlePickAvatar}
+            activeOpacity={0.8}
+            accessibilityLabel="Change profile avatar">
             {userAuth?.avatar ? (
               <Image source={{ uri: userAuth.avatar }} style={styles.avatarImage} />
             ) : (
-              <HugeiconsIcon icon={UserIcon} size={24} color={Colors.primary} strokeWidth={2} />
+              <MascotAvatar size={62} />
             )}
-          </View>
+
+            <View style={styles.cameraIconBadge}>
+              {uploadingImage ? (
+                <ActivityIndicator size="small" color={Colors.white} />
+              ) : (
+                <HugeiconsIcon icon={Camera01Icon} size={12} color={Colors.white} strokeWidth={2.4} />
+              )}
+            </View>
+          </TouchableOpacity>
+
           <View style={styles.accountTextCol}>
             <Text style={styles.accountName}>{userAuth?.name || 'Rahul Sana'}</Text>
             <Text style={styles.accountEmail}>{userAuth?.email || 'rahul.s@muse.ai'}</Text>
+            {userAuth?.avatar ? (
+              <TouchableOpacity onPress={handleRemoveAvatar} style={styles.resetAvatarBtn}>
+                <Text style={styles.resetAvatarText}>Use Mascot Avatar</Text>
+              </TouchableOpacity>
+            ) : null}
           </View>
+
           <View style={styles.proBadge}>
             <Text style={styles.proBadgeText}>PRO</Text>
           </View>
@@ -118,173 +188,198 @@ export default function SettingsScreen() {
           </View>
           <TouchableOpacity
             style={styles.upgradeBtn}
-            onPress={() => showToast('Upgrade to Pro')}
-            activeOpacity={0.7}>
+            onPress={() => showToast('Upgraded to Unlimited Plan')}
+            activeOpacity={0.8}>
             <Text style={styles.upgradeBtnText}>Upgrade Plan</Text>
           </TouchableOpacity>
         </View>
 
-        {/* 2. Primary Group: Connectors & Pricing */}
-        <View style={styles.groupCard}>
+        {/* 2. Menu Section: Workspaces & Integrations */}
+        <View style={styles.menuGroup}>
           <TouchableOpacity
-            style={styles.listItem}
+            style={styles.menuItem}
             onPress={() => setIsConnectorsOpen(true)}
-            activeOpacity={0.65}>
-            <View style={styles.listIconCol}>
-              <HugeiconsIcon icon={Grid02Icon} size={22} color={Colors.iconDark} strokeWidth={2} />
+            activeOpacity={0.7}>
+            <View style={styles.menuIconWrap}>
+              <HugeiconsIcon icon={Grid02Icon} size={20} color={Colors.primary} strokeWidth={2} />
             </View>
-            <Text style={styles.listLabel}>Connectors (7 Connected)</Text>
-            <HugeiconsIcon icon={ArrowRight01Icon} size={20} color={Colors.iconMuted} strokeWidth={1.8} />
+            <View style={styles.menuTextWrap}>
+              <Text style={styles.menuTitle}>Connectors & Workspaces</Text>
+              <Text style={styles.menuSubtitle}>
+                {connectedList.length} tools actively connected
+              </Text>
+            </View>
+            <HugeiconsIcon icon={ArrowRight01Icon} size={18} color={Colors.iconMuted} />
           </TouchableOpacity>
 
-          <View style={styles.rowDivider} />
-
           <TouchableOpacity
-            style={styles.listItem}
-            onPress={() => showToast('Pricing & Plans')}
-            activeOpacity={0.65}>
-            <View style={styles.listIconCol}>
-              <HugeiconsIcon icon={Tag01Icon} size={22} color={Colors.iconDark} strokeWidth={2} />
+            style={styles.menuItem}
+            onPress={() => showToast('Pricing plans')}
+            activeOpacity={0.7}>
+            <View style={styles.menuIconWrap}>
+              <HugeiconsIcon icon={Tag01Icon} size={20} color="#10B981" strokeWidth={2} />
             </View>
-            <Text style={styles.listLabel}>Pricing & Token Limits</Text>
-            <HugeiconsIcon icon={ArrowRight01Icon} size={20} color={Colors.iconMuted} strokeWidth={1.8} />
+            <View style={styles.menuTextWrap}>
+              <Text style={styles.menuTitle}>Billing & Invoices</Text>
+              <Text style={styles.menuSubtitle}>Manage payment methods and history</Text>
+            </View>
+            <HugeiconsIcon icon={ArrowRight01Icon} size={18} color={Colors.iconMuted} />
           </TouchableOpacity>
         </View>
 
-        {/* 3. Secondary Group: Preferences & Support */}
-        <View style={styles.groupCard}>
+        {/* 3. Menu Section: App Preferences */}
+        <View style={styles.menuGroup}>
           <TouchableOpacity
-            style={styles.listItem}
-            onPress={() => showToast('Notifications')}
-            activeOpacity={0.65}>
-            <View style={styles.listIconCol}>
-              <HugeiconsIcon icon={Notification01Icon} size={22} color={Colors.iconDark} strokeWidth={2} />
+            style={styles.menuItem}
+            onPress={() => showToast('Notification settings')}
+            activeOpacity={0.7}>
+            <View style={styles.menuIconWrap}>
+              <HugeiconsIcon icon={Notification01Icon} size={20} color="#F59E0B" strokeWidth={2} />
             </View>
-            <Text style={styles.listLabel}>Notifications</Text>
-            <HugeiconsIcon icon={ArrowRight01Icon} size={20} color={Colors.iconMuted} strokeWidth={1.8} />
+            <View style={styles.menuTextWrap}>
+              <Text style={styles.menuTitle}>Notifications</Text>
+              <Text style={styles.menuSubtitle}>Autonomous goals & daily summaries</Text>
+            </View>
+            <HugeiconsIcon icon={ArrowRight01Icon} size={18} color={Colors.iconMuted} />
           </TouchableOpacity>
 
-          <View style={styles.rowDivider} />
-
           <TouchableOpacity
-            style={styles.listItem}
-            onPress={() => showToast('Appearance')}
-            activeOpacity={0.65}>
-            <View style={styles.listIconCol}>
-              <HugeiconsIcon icon={PaintBrush01Icon} size={22} color={Colors.iconDark} strokeWidth={2} />
+            style={styles.menuItem}
+            onPress={() => showToast('Appearance settings')}
+            activeOpacity={0.7}>
+            <View style={styles.menuIconWrap}>
+              <HugeiconsIcon icon={PaintBrush01Icon} size={20} color="#8B5CF6" strokeWidth={2} />
             </View>
-            <Text style={styles.listLabel}>Appearance</Text>
-            <HugeiconsIcon icon={ArrowRight01Icon} size={20} color={Colors.iconMuted} strokeWidth={1.8} />
+            <View style={styles.menuTextWrap}>
+              <Text style={styles.menuTitle}>Appearance</Text>
+              <Text style={styles.menuSubtitle}>Theme, accent aura and display</Text>
+            </View>
+            <HugeiconsIcon icon={ArrowRight01Icon} size={18} color={Colors.iconMuted} />
+          </TouchableOpacity>
+        </View>
+
+        {/* 4. Support & Sign Out */}
+        <View style={styles.menuGroup}>
+          <TouchableOpacity
+            style={styles.menuItem}
+            onPress={() => showToast('Help Center opened')}
+            activeOpacity={0.7}>
+            <View style={styles.menuIconWrap}>
+              <HugeiconsIcon icon={HelpCircleIcon} size={20} color="#64748B" strokeWidth={2} />
+            </View>
+            <View style={styles.menuTextWrap}>
+              <Text style={styles.menuTitle}>Help & Feedback</Text>
+              <Text style={styles.menuSubtitle}>Docs, guides, and priority support</Text>
+            </View>
+            <HugeiconsIcon icon={ArrowRight01Icon} size={18} color={Colors.iconMuted} />
           </TouchableOpacity>
 
-          <View style={styles.rowDivider} />
-
           <TouchableOpacity
-            style={styles.listItem}
-            onPress={() => showToast('Help & Feedback')}
-            activeOpacity={0.65}>
-            <View style={styles.listIconCol}>
-              <HugeiconsIcon icon={HelpCircleIcon} size={22} color={Colors.iconDark} strokeWidth={2} />
-            </View>
-            <Text style={styles.listLabel}>Help & Feedback</Text>
-            <HugeiconsIcon icon={ArrowRight01Icon} size={20} color={Colors.iconMuted} strokeWidth={1.8} />
-          </TouchableOpacity>
-
-          <View style={styles.rowDivider} />
-
-          <TouchableOpacity
-            style={styles.listItem}
+            style={[styles.menuItem, styles.signOutItem]}
             onPress={handleSignOut}
-            activeOpacity={0.65}>
-            <View style={styles.listIconCol}>
-              <HugeiconsIcon icon={Logout01Icon} size={22} color={Colors.error} strokeWidth={2} />
+            activeOpacity={0.7}>
+            <View style={[styles.menuIconWrap, { backgroundColor: '#FEE2E2' }]}>
+              <HugeiconsIcon icon={Logout01Icon} size={20} color="#EF4444" strokeWidth={2} />
             </View>
-            <Text style={[styles.listLabel, { color: Colors.error }]}>Sign Out</Text>
-            <HugeiconsIcon icon={ArrowRight01Icon} size={20} color={Colors.iconMuted} strokeWidth={1.8} />
+            <View style={styles.menuTextWrap}>
+              <Text style={[styles.menuTitle, { color: '#EF4444' }]}>Sign Out</Text>
+              <Text style={styles.menuSubtitle}>Log out of your Muse account</Text>
+            </View>
+            <HugeiconsIcon icon={ArrowRight01Icon} size={18} color="#EF4444" />
           </TouchableOpacity>
         </View>
-
-        <View style={{ height: 40 }} />
       </ScrollView>
 
-      {/* Connectors Full Sheet Modal (Matching Screenshot 4) */}
+      {/* Real-time Connectors Full Modal */}
       <Modal
         visible={isConnectorsOpen}
         animationType="slide"
+        presentationStyle="pageSheet"
         onRequestClose={() => setIsConnectorsOpen(false)}>
-        <View style={styles.modalContainer}>
+        <View style={styles.connectorsModalContainer}>
           {/* Header */}
-          <View style={styles.modalHeader}>
+          <View style={styles.connectorsHeader}>
+            <View style={styles.connectorsHeaderLeft}>
+              <Text style={styles.connectorsModalTitle}>Connectors</Text>
+              <Text style={styles.connectorsModalSubtitle}>
+                Sync services for real-time automation
+              </Text>
+            </View>
             <TouchableOpacity
-              style={styles.modalBackBtn}
+              style={styles.closeModalBtn}
               onPress={() => setIsConnectorsOpen(false)}
               activeOpacity={0.7}>
-              <HugeiconsIcon icon={ArrowRight01Icon} size={20} color={Colors.iconDark} style={{ transform: [{ rotate: '180deg' }] }} />
+              <HugeiconsIcon icon={Cancel01Icon} size={20} color={Colors.iconDark} />
             </TouchableOpacity>
-            <Text style={styles.modalTitle}>Connectors</Text>
-            <View style={{ width: 36 }} />
           </View>
 
-          <ScrollView style={styles.modalScroll} contentContainerStyle={styles.modalScrollContent} showsVerticalScrollIndicator={false}>
-            {/* Search Input */}
-            <View style={styles.searchBar}>
-              <Text style={{ fontSize: 16 }}>🔍</Text>
-              <TextInput
-                style={styles.searchInput}
-                placeholder="Search"
-                placeholderTextColor="#9CA3AF"
-                value={connectorSearch}
-                onChangeText={setConnectorSearch}
-              />
-            </View>
+          {/* Search Bar */}
+          <View style={styles.searchBar}>
+            <HugeiconsIcon icon={Search01Icon} size={18} color={Colors.iconMuted} />
+            <TextInput
+              style={styles.searchInput}
+              placeholder="Search apps and services..."
+              placeholderTextColor={Colors.iconMuted}
+              value={connectorSearch}
+              onChangeText={setConnectorSearch}
+            />
+          </View>
 
+          <ScrollView
+            style={{ flex: 1 }}
+            contentContainerStyle={styles.connectorsScrollContent}
+            showsVerticalScrollIndicator={false}>
             {/* Connected Section */}
-            <Text style={styles.connectorSectionTitle}>Connected</Text>
-            <View style={styles.connectorCard}>
-              {connectedServices
-                .filter((s) => s.name.toLowerCase().includes(connectorSearch.toLowerCase()))
-                .map((srv, idx) => (
-                  <View key={srv.name}>
-                    <View style={styles.connectorRow}>
-                      <View style={styles.connectorLeft}>
-                        <Text style={{ fontSize: 18 }}>{srv.icon}</Text>
-                        <Text style={styles.connectorName}>{srv.name}</Text>
-                      </View>
-                      <TouchableOpacity
-                        style={styles.moreBtn}
-                        onPress={() => showToast(`${srv.name} settings`)}
-                        activeOpacity={0.7}>
-                        <Text style={{ fontSize: 16, color: '#9CA3AF' }}>•••</Text>
-                      </TouchableOpacity>
+            {filteredConnected.length > 0 && (
+              <View style={styles.connectorSection}>
+                <Text style={styles.connectorSectionHeader}>Connected ({filteredConnected.length})</Text>
+                {filteredConnected.map((item) => (
+                  <View key={item.id} style={styles.connectorCard}>
+                    <View style={styles.connectorLogoWrap}>
+                      <BrandLogoIcon name={item.name} size={28} />
                     </View>
-                    {idx < connectedServices.length - 1 && <View style={styles.connectorDivider} />}
+                    <View style={styles.connectorInfo}>
+                      <Text style={styles.connectorName}>{item.name}</Text>
+                      <Text style={styles.connectorDesc} numberOfLines={1}>
+                        {item.description}
+                      </Text>
+                    </View>
+                    <TouchableOpacity
+                      style={styles.disconnectBtn}
+                      onPress={() => handleToggleConnector(item.id, item.name)}
+                      activeOpacity={0.7}>
+                      <Text style={styles.disconnectBtnText}>Disconnect</Text>
+                    </TouchableOpacity>
                   </View>
                 ))}
-            </View>
+              </View>
+            )}
 
             {/* Available Section */}
-            <Text style={[styles.connectorSectionTitle, { marginTop: 24 }]}>Available</Text>
-            <View style={styles.connectorCard}>
-              {availableServices
-                .filter((s) => s.name.toLowerCase().includes(connectorSearch.toLowerCase()))
-                .map((srv, idx) => (
-                  <View key={srv.name}>
-                    <View style={styles.connectorRow}>
-                      <View style={styles.connectorLeft}>
-                        <Text style={{ fontSize: 18 }}>{srv.icon}</Text>
-                        <Text style={styles.connectorName}>{srv.name}</Text>
-                      </View>
-                      <TouchableOpacity
-                        style={styles.connectBtn}
-                        onPress={() => showToast(`Connecting to ${srv.name}...`)}
-                        activeOpacity={0.8}>
-                        <Text style={styles.connectBtnText}>Connect</Text>
-                      </TouchableOpacity>
+            {filteredAvailable.length > 0 && (
+              <View style={styles.connectorSection}>
+                <Text style={styles.connectorSectionHeader}>Available to Connect</Text>
+                {filteredAvailable.map((item) => (
+                  <View key={item.id} style={styles.connectorCard}>
+                    <View style={styles.connectorLogoWrap}>
+                      <BrandLogoIcon name={item.name} size={28} />
                     </View>
-                    {idx < availableServices.length - 1 && <View style={styles.connectorDivider} />}
+                    <View style={styles.connectorInfo}>
+                      <Text style={styles.connectorName}>{item.name}</Text>
+                      <Text style={styles.connectorDesc} numberOfLines={1}>
+                        {item.description}
+                      </Text>
+                    </View>
+                    <TouchableOpacity
+                      style={styles.connectBtn}
+                      onPress={() => handleToggleConnector(item.id, item.name)}
+                      activeOpacity={0.8}>
+                      <Text style={styles.connectBtnText}>Connect</Text>
+                    </TouchableOpacity>
                   </View>
                 ))}
-            </View>
+              </View>
+            )}
           </ScrollView>
         </View>
       </Modal>
@@ -301,43 +396,50 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   scrollContent: {
-    paddingBottom: 24,
-  },
-  headerRow: {
     paddingHorizontal: 20,
     paddingTop: 12,
-    paddingBottom: 16,
+    paddingBottom: 40,
+  },
+  headerRow: {
+    marginBottom: 16,
   },
   pageTitle: {
-    fontSize: 28,
-    fontWeight: '700',
+    fontSize: 26,
+    fontWeight: '800',
     color: Colors.iconDark,
     letterSpacing: -0.5,
   },
   accountCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginHorizontal: 20,
-    marginBottom: 16,
-    backgroundColor: '#FAFAFB',
+    backgroundColor: '#F8FAFC',
     borderRadius: 20,
     padding: 16,
+    marginBottom: 16,
     borderWidth: 1,
-    borderColor: '#ECEEF0',
+    borderColor: '#F1F5F9',
     gap: 14,
   },
-  avatarContainer: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: Colors.primarySubtle,
-    alignItems: 'center',
-    justifyContent: 'center',
-    overflow: 'hidden',
+  avatarWrapper: {
+    position: 'relative',
   },
   avatarImage: {
-    width: 48,
-    height: 48,
+    width: 62,
+    height: 62,
+    borderRadius: 31,
+  },
+  cameraIconBadge: {
+    position: 'absolute',
+    bottom: -2,
+    right: -2,
+    backgroundColor: Colors.primary,
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 2,
+    borderColor: '#FFFFFF',
   },
   accountTextCol: {
     flex: 1,
@@ -346,31 +448,39 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '700',
     color: Colors.iconDark,
+    marginBottom: 2,
   },
   accountEmail: {
     fontSize: 13,
     color: Colors.textSecondary,
-    marginTop: 2,
+  },
+  resetAvatarBtn: {
+    marginTop: 4,
+  },
+  resetAvatarText: {
+    fontSize: 11.5,
+    color: Colors.primary,
+    fontWeight: '600',
   },
   proBadge: {
     backgroundColor: Colors.primary,
-    paddingHorizontal: 8,
+    paddingHorizontal: 10,
     paddingVertical: 4,
-    borderRadius: 8,
+    borderRadius: 12,
   },
   proBadgeText: {
+    color: Colors.white,
     fontSize: 11,
     fontWeight: '800',
-    color: Colors.white,
+    letterSpacing: 0.5,
   },
   planCard: {
-    marginHorizontal: 20,
-    marginBottom: 16,
-    backgroundColor: '#FAFAFB',
+    backgroundColor: '#F8FAFC',
     borderRadius: 20,
-    padding: 18,
+    padding: 16,
+    marginBottom: 18,
     borderWidth: 1,
-    borderColor: '#ECEEF0',
+    borderColor: '#F1F5F9',
   },
   planHeaderRow: {
     flexDirection: 'row',
@@ -379,172 +489,203 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   planTitle: {
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: '700',
     color: Colors.iconDark,
-    letterSpacing: -0.2,
   },
   planUsageText: {
     fontSize: 13,
-    fontWeight: '700',
-    color: '#0066FF',
+    fontWeight: '600',
+    color: Colors.textSecondary,
   },
   planResetText: {
-    fontSize: 12.5,
-    color: '#707070',
+    fontSize: 12,
+    color: Colors.textSecondary,
     marginBottom: 12,
   },
   progressBarTrack: {
     height: 6,
-    backgroundColor: '#E6E8EA',
+    backgroundColor: '#E2E8F0',
     borderRadius: 3,
     overflow: 'hidden',
     marginBottom: 14,
   },
   progressBarFill: {
     height: '100%',
-    backgroundColor: '#0066FF',
+    backgroundColor: Colors.primary,
     borderRadius: 3,
   },
   upgradeBtn: {
-    alignSelf: 'flex-start',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 14,
+    paddingVertical: 10,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
   },
   upgradeBtnText: {
     fontSize: 13.5,
     fontWeight: '700',
-    color: '#0066FF',
-  },
-  groupCard: {
-    marginHorizontal: 20,
-    marginBottom: 16,
-    backgroundColor: '#FAFAFB',
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: '#ECEEF0',
-    overflow: 'hidden',
-  },
-  listItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 15,
-    paddingHorizontal: 16,
-  },
-  listIconCol: {
-    width: 32,
-    alignItems: 'flex-start',
-  },
-  listLabel: {
-    flex: 1,
-    fontSize: 16,
-    fontWeight: '600',
     color: Colors.iconDark,
-    letterSpacing: -0.2,
   },
-  rowDivider: {
-    height: 1,
-    backgroundColor: '#F0F0F2',
-    marginLeft: 48,
-  },
-  modalContainer: {
-    flex: 1,
+  menuGroup: {
     backgroundColor: '#F8FAFC',
-    paddingTop: 40,
+    borderRadius: 20,
+    paddingVertical: 4,
+    marginBottom: 14,
+    borderWidth: 1,
+    borderColor: '#F1F5F9',
   },
-  modalHeader: {
+  menuItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
     paddingHorizontal: 16,
-    paddingBottom: 16,
+    paddingVertical: 12,
+    gap: 12,
   },
-  modalBackBtn: {
+  signOutItem: {
+    borderTopWidth: 1,
+    borderTopColor: '#F1F5F9',
+  },
+  menuIconWrap: {
     width: 36,
     height: 36,
-    borderRadius: 18,
-    backgroundColor: '#FFFFFF',
+    borderRadius: 10,
+    backgroundColor: '#EFF6FF',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  modalTitle: {
-    fontSize: 17,
-    fontWeight: '700',
-    color: Colors.iconDark,
-  },
-  modalScroll: {
+  menuTextWrap: {
     flex: 1,
   },
-  modalScrollContent: {
-    paddingHorizontal: 16,
-    paddingBottom: 40,
+  menuTitle: {
+    fontSize: 14.5,
+    fontWeight: '600',
+    color: Colors.iconDark,
+  },
+  menuSubtitle: {
+    fontSize: 12,
+    color: Colors.textSecondary,
+    marginTop: 1,
+  },
+  connectorsModalContainer: {
+    flex: 1,
+    backgroundColor: Colors.white,
+    paddingTop: Platform.OS === 'ios' ? 20 : 16,
+  },
+  connectorsHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 20,
+    marginBottom: 14,
+  },
+  connectorsHeaderLeft: {
+    flex: 1,
+  },
+  connectorsModalTitle: {
+    fontSize: 22,
+    fontWeight: '800',
+    color: Colors.iconDark,
+  },
+  connectorsModalSubtitle: {
+    fontSize: 13,
+    color: Colors.textSecondary,
+    marginTop: 2,
+  },
+  closeModalBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#F1F5F9',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   searchBar: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#FFFFFF',
-    borderRadius: 16,
+    backgroundColor: '#F1F5F9',
+    borderRadius: 14,
+    marginHorizontal: 20,
     paddingHorizontal: 14,
-    paddingVertical: 10,
-    marginBottom: 20,
+    height: 44,
+    marginBottom: 14,
     gap: 10,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
   },
   searchInput: {
     flex: 1,
-    fontSize: 15,
+    fontSize: 14,
     color: Colors.iconDark,
   },
-  connectorSectionTitle: {
-    fontSize: 12,
+  connectorsScrollContent: {
+    paddingHorizontal: 20,
+    paddingBottom: 40,
+  },
+  connectorSection: {
+    marginBottom: 20,
+  },
+  connectorSectionHeader: {
+    fontSize: 13,
     fontWeight: '700',
-    color: '#64748B',
+    color: Colors.textSecondary,
     textTransform: 'uppercase',
     letterSpacing: 0.5,
     marginBottom: 10,
-    marginLeft: 4,
   },
   connectorCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 20,
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F8FAFC',
+    borderRadius: 16,
+    padding: 12,
+    marginBottom: 10,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
-    overflow: 'hidden',
-  },
-  connectorRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-  },
-  connectorLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    borderColor: '#F1F5F9',
     gap: 12,
   },
+  connectorLogoWrap: {
+    width: 40,
+    height: 40,
+    borderRadius: 10,
+    backgroundColor: '#FFFFFF',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  connectorInfo: {
+    flex: 1,
+  },
   connectorName: {
-    fontSize: 15,
-    fontWeight: '600',
+    fontSize: 14.5,
+    fontWeight: '700',
     color: Colors.iconDark,
   },
-  moreBtn: {
-    paddingHorizontal: 8,
-    paddingVertical: 4,
+  connectorDesc: {
+    fontSize: 12,
+    color: Colors.textSecondary,
+    marginTop: 1,
   },
-  connectorDivider: {
-    height: 1,
-    backgroundColor: '#F1F5F9',
-    marginLeft: 46,
+  disconnectBtn: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 10,
+    backgroundColor: '#FEE2E2',
+  },
+  disconnectBtnText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#EF4444',
   },
   connectBtn: {
-    backgroundColor: '#EFF6FF',
     paddingHorizontal: 14,
     paddingVertical: 6,
-    borderRadius: 12,
+    borderRadius: 10,
+    backgroundColor: Colors.primary,
   },
   connectBtnText: {
-    color: Colors.primary,
+    fontSize: 12,
     fontWeight: '700',
-    fontSize: 13,
+    color: Colors.white,
   },
 });

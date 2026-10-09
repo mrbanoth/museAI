@@ -138,7 +138,7 @@ export default function FeedScreen() {
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[Colors.primary]} />}>
           {filteredItems.length === 0 ? (
             <View style={styles.emptyContainer}>
-              <Text style={styles.emptyEmoji}>📡</Text>
+              <HugeiconsIcon icon={SparklesIcon} size={36} color={Colors.primary} />
               <Text style={styles.emptyTitle}>No insights in this category yet</Text>
               <Text style={styles.emptyDesc}>
                 Execute workflows in the Ideas or Tasks tab to populate your feed stream.
@@ -150,7 +150,7 @@ export default function FeedScreen() {
                 {/* Top Badge & Time */}
                 <View style={styles.cardTopRow}>
                   <View style={styles.categoryBadge}>
-                    <Text style={styles.categoryIcon}>{item.icon}</Text>
+                    <HugeiconsIcon icon={SparklesIcon} size={13} color={Colors.primary} strokeWidth={2.2} />
                     <Text style={styles.categoryText}>{item.category}</Text>
                   </View>
                   <Text style={styles.timestampText}>{item.timestamp}</Text>
