@@ -214,6 +214,10 @@ export async function processAgentChat(
         }
 
         // 2. Second turn: Feed tool outputs back to generate the final synthesis
+        const modelParts = response.candidates?.[0]?.content?.parts || functionCalls.map((fc: any) => ({
+          functionCall: { name: fc.name, args: fc.args },
+        }));
+
         const followUp = await ai.models.generateContent({
           model: modelName,
           contents: [
@@ -221,9 +225,7 @@ export async function processAgentChat(
             { role: 'user', parts: [{ text: userMessage }] },
             {
               role: 'model',
-              parts: functionCalls.map((fc: any) => ({
-                functionCall: { name: fc.name, args: fc.args },
-              })),
+              parts: modelParts,
             },
             {
               role: 'user',
