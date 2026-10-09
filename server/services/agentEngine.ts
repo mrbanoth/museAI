@@ -204,6 +204,7 @@ export async function processAgentChat(
         const toolResponses: Array<{ name: string; response: any }> = [];
 
         for (const call of functionCalls) {
+          if (!call.name) continue;
           const result = await executeTool(call.name, call.args, actions);
           toolResponses.push({
             name: call.name,
