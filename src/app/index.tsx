@@ -3,24 +3,27 @@
  *
  * All-in-one onboarding & Google Sign-in screen:
  * - Center: Glowing blue Muse AI brand emblem hero
- * - Bottom: Full-width Google Sign-in action button with SVG brand mark & press feedback
+ * - Bottom: Full-width Google Sign-in action button & Continue as Guest option
+ * - Auto-redirects if already authenticated
  */
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   Pressable,
   ActivityIndicator,
+  TouchableOpacity,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Svg, { Path } from 'react-native-svg';
 import { HugeiconsIcon } from '@hugeicons/react-native';
-import { AiSparklesIcon } from '@hugeicons/core-free-icons';
+import { AiSparklesIcon, UserIcon } from '@hugeicons/core-free-icons';
 import { Colors } from '@/constants/colors';
 import { useRouter } from 'expo-router';
 import { showToast } from '@/context/ToastContext';
+import { StorageService } from '@/services/storage';
 
 /**
  * 4-Color Official Google Brand SVG Icon
@@ -50,8 +53,39 @@ export default function SignInScreen() {
   const [loading, setLoading] = useState(false);
   const router = useRouter();
 
-  const handleGoogleSignIn = () => {
-    showToast('Signed in successfully');
+  // Check if already authenticated
+  useEffect(() => {
+    (async () => {
+      const auth = await StorageService.getUserAuth();
+      if (auth && auth.signedIn) {
+        router.replace('/(tabs)/chat' as any);
+      }
+    })();
+  }, [router]);
+
+  const handleGoogleSignIn = async () => {
+    setLoading(true);
+    try {
+      await StorageService.saveUserAuth({
+        signedIn: true,
+        name: 'Rahul Sana',
+        email: 'rahul.s@muse.ai',
+        avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150',
+      });
+      showToast('Signed in with Google');
+      router.replace('/(tabs)/chat' as any);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleGuestContinue = async () => {
+    await StorageService.saveUserAuth({
+      signedIn: true,
+      name: 'Guest Explorer',
+      email: 'guest@muse.ai',
+    });
+    showToast('Welcome, Explorer!');
     router.replace('/(tabs)/chat' as any);
   };
 
@@ -78,9 +112,10 @@ export default function SignInScreen() {
             <Text style={styles.brandName}>Muse</Text>
             <Text style={styles.aiText}> AI</Text>
           </View>
+          <Text style={styles.tagline}>Autonomous Agent & Cloud Companion</Text>
         </View>
 
-        {/* Bottom Action: Google Sign-In Button */}
+        {/* Bottom Actions */}
         <View style={styles.actionContainer}>
           <Pressable
             onPress={handleGoogleSignIn}
@@ -103,6 +138,14 @@ export default function SignInScreen() {
               </View>
             )}
           </Pressable>
+
+          <TouchableOpacity
+            style={styles.guestButton}
+            onPress={handleGuestContinue}
+            activeOpacity={0.7}>
+            <HugeiconsIcon icon={UserIcon} size={16} color={Colors.textSecondary} strokeWidth={2} />
+            <Text style={styles.guestButtonText}>Continue as Guest</Text>
+          </TouchableOpacity>
         </View>
       </View>
     </SafeAreaView>
@@ -169,9 +212,16 @@ const styles = StyleSheet.create({
     color: Colors.primary,
     letterSpacing: -0.6,
   },
+  tagline: {
+    fontSize: 14,
+    color: Colors.textSecondary,
+    marginTop: 8,
+    fontWeight: '500',
+  },
   actionContainer: {
     width: '100%',
     alignItems: 'center',
+    gap: 12,
   },
   button: {
     height: 54,
@@ -210,5 +260,17 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: Colors.textPrimary,
     letterSpacing: -0.2,
+  },
+  guestButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+  },
+  guestButtonText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: Colors.textSecondary,
   },
 });

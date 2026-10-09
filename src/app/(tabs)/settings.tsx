@@ -2,19 +2,22 @@
  * Settings Tab Screen ('/(tabs)/settings')
  *
  * Clean settings & account management:
+ * - User Profile Account Card
  * - Free Plan progress card
  * - Settings items (Connectors, Pricing, Notifications, Appearance, Help & Feedback, Sign Out)
- * - Simple on-click Toast triggers without complex modal logic
+ * - Sign Out with auth clearance and redirection
  */
 
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   ScrollView,
   TouchableOpacity,
+  Image,
 } from 'react-native';
+import { useRouter } from 'expo-router';
 import { HugeiconsIcon } from '@hugeicons/react-native';
 import {
   Grid02Icon,
@@ -24,12 +27,32 @@ import {
   ArrowRight01Icon,
   HelpCircleIcon,
   Logout01Icon,
+  UserIcon,
 } from '@hugeicons/core-free-icons';
 import { Colors } from '@/constants/colors';
 import { SETTINGS_PLAN_DATA } from '@/constants/dummyData';
 import { showToast } from '@/context/ToastContext';
+import { StorageService } from '@/services/storage';
 
 export default function SettingsScreen() {
+  const router = useRouter();
+  const [userAuth, setUserAuth] = useState<{ name?: string; email?: string; avatar?: string } | null>(null);
+
+  useEffect(() => {
+    (async () => {
+      const auth = await StorageService.getUserAuth();
+      if (auth) {
+        setUserAuth(auth);
+      }
+    })();
+  }, []);
+
+  const handleSignOut = async () => {
+    await StorageService.clearUserAuth();
+    showToast('Signed Out');
+    router.replace('/' as any);
+  };
+
   return (
     <View style={styles.container}>
       <ScrollView
@@ -39,6 +62,24 @@ export default function SettingsScreen() {
         {/* Title */}
         <View style={styles.headerRow}>
           <Text style={styles.pageTitle}>Settings</Text>
+        </View>
+
+        {/* 0. User Account Card */}
+        <View style={styles.accountCard}>
+          <View style={styles.avatarContainer}>
+            {userAuth?.avatar ? (
+              <Image source={{ uri: userAuth.avatar }} style={styles.avatarImage} />
+            ) : (
+              <HugeiconsIcon icon={UserIcon} size={24} color={Colors.primary} strokeWidth={2} />
+            )}
+          </View>
+          <View style={styles.accountTextCol}>
+            <Text style={styles.accountName}>{userAuth?.name || 'Rahul Sana'}</Text>
+            <Text style={styles.accountEmail}>{userAuth?.email || 'rahul.s@muse.ai'}</Text>
+          </View>
+          <View style={styles.proBadge}>
+            <Text style={styles.proBadgeText}>PRO</Text>
+          </View>
         </View>
 
         {/* 1. Free Plan Card */}
@@ -60,7 +101,7 @@ export default function SettingsScreen() {
             style={styles.upgradeBtn}
             onPress={() => showToast('Upgrade to Pro')}
             activeOpacity={0.7}>
-            <Text style={styles.upgradeBtnText}>Upgrade</Text>
+            <Text style={styles.upgradeBtnText}>Upgrade Plan</Text>
           </TouchableOpacity>
         </View>
 
@@ -68,12 +109,12 @@ export default function SettingsScreen() {
         <View style={styles.groupCard}>
           <TouchableOpacity
             style={styles.listItem}
-            onPress={() => showToast('Connectors')}
+            onPress={() => showToast('Browserbase & 7 Connectors Active')}
             activeOpacity={0.65}>
             <View style={styles.listIconCol}>
               <HugeiconsIcon icon={Grid02Icon} size={22} color={Colors.iconDark} strokeWidth={2} />
             </View>
-            <Text style={styles.listLabel}>Connectors</Text>
+            <Text style={styles.listLabel}>Connectors (Browserbase Active)</Text>
             <HugeiconsIcon icon={ArrowRight01Icon} size={20} color={Colors.iconMuted} strokeWidth={1.8} />
           </TouchableOpacity>
 
@@ -86,7 +127,7 @@ export default function SettingsScreen() {
             <View style={styles.listIconCol}>
               <HugeiconsIcon icon={Tag01Icon} size={22} color={Colors.iconDark} strokeWidth={2} />
             </View>
-            <Text style={styles.listLabel}>Pricing</Text>
+            <Text style={styles.listLabel}>Pricing & Token Limits</Text>
             <HugeiconsIcon icon={ArrowRight01Icon} size={20} color={Colors.iconMuted} strokeWidth={1.8} />
           </TouchableOpacity>
         </View>
@@ -134,7 +175,7 @@ export default function SettingsScreen() {
 
           <TouchableOpacity
             style={styles.listItem}
-            onPress={() => showToast('Signed Out')}
+            onPress={handleSignOut}
             activeOpacity={0.65}>
             <View style={styles.listIconCol}>
               <HugeiconsIcon icon={Logout01Icon} size={22} color={Colors.error} strokeWidth={2} />
@@ -172,9 +213,58 @@ const styles = StyleSheet.create({
     color: Colors.iconDark,
     letterSpacing: -0.5,
   },
+  accountCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginHorizontal: 20,
+    marginBottom: 16,
+    backgroundColor: '#FAFAFB',
+    borderRadius: 20,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: '#ECEEF0',
+    gap: 14,
+  },
+  avatarContainer: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: Colors.primarySubtle,
+    alignItems: 'center',
+    justifyContent: 'center',
+    overflow: 'hidden',
+  },
+  avatarImage: {
+    width: 48,
+    height: 48,
+  },
+  accountTextCol: {
+    flex: 1,
+  },
+  accountName: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: Colors.iconDark,
+  },
+  accountEmail: {
+    fontSize: 13,
+    color: Colors.textSecondary,
+    marginTop: 2,
+  },
+  proBadge: {
+    backgroundColor: Colors.primary,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 8,
+  },
+  proBadgeText: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: Colors.white,
+  },
   planCard: {
     marginHorizontal: 20,
-    marginBottom: 20,
+    marginBottom: 16,
     backgroundColor: '#FAFAFB',
     borderRadius: 20,
     padding: 18,
