@@ -45,8 +45,8 @@ app.use('/api/sessions', sessionsRouter);
 app.use('/api/feed', feedRouter);
 
 // Start server
-app.listen(PORT, () => {
-  console.log(`\n🤖 [Muse AI Backend] Server running on http://localhost:${PORT}`);
+app.listen(Number(PORT), '0.0.0.0', () => {
+  console.log(`\n🤖 [Muse AI Backend] Server running on http://0.0.0.0:${PORT} (LAN: http://192.168.1.40:${PORT})`);
   console.log(`🌐 [Browserbase Status] API Key configured: ${!!process.env.BROWSERBASE_API_KEY}`);
   console.log(`📡 Endpoints available:`);
   console.log(`   • GET  /api/health`);

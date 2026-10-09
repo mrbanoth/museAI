@@ -1,8 +1,29 @@
 import { Platform } from 'react-native';
+import Constants from 'expo-constants';
 
-// On Android emulator localhost is 10.0.2.2, on web/iOS simulator it's localhost
-const API_BASE_URL =
-  Platform.OS === 'android' ? 'http://10.0.2.2:3001/api' : 'http://localhost:3001/api';
+// Dynamically resolve backend host IP on physical mobile devices, emulators, and web
+const getApiBaseUrl = () => {
+  const hostUri =
+    Constants.expoConfig?.hostUri ||
+    (Constants as any).manifest2?.extra?.expoClient?.hostUri ||
+    (Constants as any).manifest?.debuggerHost;
+
+  if (hostUri) {
+    const ip = hostUri.split(':')[0];
+    if (ip && ip !== 'localhost' && ip !== '127.0.0.1') {
+      return `http://${ip}:3001/api`;
+    }
+  }
+
+  if (Platform.OS === 'web') {
+    return 'http://localhost:3001/api';
+  }
+
+  // Fallback to computer LAN IP
+  return 'http://192.168.1.40:3001/api';
+};
+
+const API_BASE_URL = getApiBaseUrl();
 
 export interface ChatApiResponse {
   success: boolean;
