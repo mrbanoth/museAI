@@ -6,14 +6,42 @@ import { ChatMessage, TaskGoalItem, FeedItem, AgentProfile } from '@/types';
 export const SUPABASE_URL = process.env.EXPO_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL || 'https://hmkdafydnmouvmdvgwin.supabase.co';
 export const SUPABASE_ANON_KEY = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY || 'sb_publishable_3k8MdQMUoI-zhCXze3dBIA_LD_hBBjT';
 
-const isBrowser = typeof window !== 'undefined';
+// Safe universal storage adapter that never throws ReferenceError on Node.js/SSR
+const customStorage = {
+  getItem: async (key: string): Promise<string | null> => {
+    try {
+      if (Platform.OS === 'web' && typeof window === 'undefined') {
+        return null;
+      }
+      return await AsyncStorage.getItem(key);
+    } catch {
+      return null;
+    }
+  },
+  setItem: async (key: string, value: string): Promise<void> => {
+    try {
+      if (Platform.OS === 'web' && typeof window === 'undefined') {
+        return;
+      }
+      await AsyncStorage.setItem(key, value);
+    } catch {}
+  },
+  removeItem: async (key: string): Promise<void> => {
+    try {
+      if (Platform.OS === 'web' && typeof window === 'undefined') {
+        return;
+      }
+      await AsyncStorage.removeItem(key);
+    } catch {}
+  },
+};
 
 export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
   auth: {
-    storage: (isBrowser || Platform.OS !== 'web' ? AsyncStorage : undefined) as any,
-    autoRefreshToken: isBrowser || Platform.OS !== 'web',
-    persistSession: isBrowser || Platform.OS !== 'web',
-    detectSessionInUrl: isBrowser && Platform.OS === 'web',
+    storage: customStorage as any,
+    autoRefreshToken: Platform.OS !== 'web' || typeof window !== 'undefined',
+    persistSession: Platform.OS !== 'web' || typeof window !== 'undefined',
+    detectSessionInUrl: Platform.OS === 'web' && typeof window !== 'undefined',
   },
 });
 
