@@ -20,7 +20,7 @@ export const MascotAvatar: React.FC<MascotAvatarProps> = ({
 }) => {
   return (
     <Image
-      source={require('../../../assets/images/cooper_mascot.jpg')}
+      source={require('../../../assets/images/muse_mascot.png')}
       style={[
         styles.avatar,
         {

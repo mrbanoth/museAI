@@ -38,9 +38,9 @@ export default function TabLayout() {
   const router = useRouter();
 
   // Agent mascot & profile state
-  const [agentName, setAgentName] = useState('Cooper');
+  const [agentName, setAgentName] = useState('Muse AI');
   const [agentSubtitle, setAgentSubtitle] = useState('Autonomous Agent');
-  const [mascotIcon, setMascotIcon] = useState('cooper');
+  const [mascotIcon, setMascotIcon] = useState('muse');
   const [mascotColor, setMascotColor] = useState<string>(Colors.primary);
 
   // Modals state

@@ -2,7 +2,7 @@
  * Muse AI Clone - Mock Data Datasets
  *
  * Centralized initial state mocks for:
- * 1. Chat conversation messages & Cooper AI responses
+ * 1. Chat conversation messages & Muse AI responses
  * 2. Sidebar drawer chat sessions & side topics
  * 3. Pre-built prompt idea templates for one-tap agent execution
  * 4. Scheduled autonomous goals and background tasks

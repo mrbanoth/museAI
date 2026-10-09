@@ -50,7 +50,7 @@ export const EditAgentModal: React.FC<EditAgentModalProps> = ({
   visible,
   initialName,
   initialSubtitle = 'Autonomous Agent',
-  initialIcon = 'cooper',
+  initialIcon = 'muse',
   initialColor = Colors.primary,
   onClose,
   onSave,

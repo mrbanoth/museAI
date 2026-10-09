@@ -1,12 +1,12 @@
 # Muse AI Clone - Developer & Agent Guide
 
-This is an Expo/React Native application for **Muse AI** (and AI companion **Cooper**) — an autonomous AI agent application tailored for recurring tasks, automated workflows, chat companion interactions, and scheduled operations.
+This is an Expo/React Native application for **Muse AI** — an autonomous AI agent application tailored for recurring tasks, automated workflows, chat companion interactions, and scheduled operations.
 
 ---
 
 ## 🚀 Project Overview
 
-- **App Name:** Muse AI Clone
+- **App Name:** Muse AI
 - **Core Concept:** Autonomous AI Agent & Chat Companion for Recurring Tasks, Goals, and Automated Workflows
 - **Platform:** iOS, Android, and Web (Universal React Native)
 - **Current Phase:** Full UI Implementation with Clean Expo Router Tab Architecture, Pixel-Perfect Chat, Header Mascot, Floating Dock Tabs, Sidebar Drawer, and Settings.
@@ -50,7 +50,7 @@ muse_ai_clone/
 ├── package.json               # Dependencies & scripts
 ├── assets/
 │   └── images/
-│       └── cooper_mascot.jpg  # 3D character mascot avatar portrait
+│       └── muse_mascot.png    # Waving Pastel Plush Mascot Avatar DP
 ├── src/
 │   ├── app/                   # Expo Router file-based screens
 │   │   ├── _layout.tsx        # Root Stack navigator & ThemeProvider

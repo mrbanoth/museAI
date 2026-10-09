@@ -15,9 +15,9 @@ import { Colors } from '@/constants/colors';
 import MascotAvatar from './MascotAvatar';
 
 export interface AppHeaderProps {
-  /** Active agent display name (defaults to 'Cooper') */
+  /** Active agent display name (defaults to 'Muse AI') */
   agentName?: string;
-  /** Mascot emblem icon key or 'cooper' */
+  /** Mascot emblem icon key or 'muse' */
   mascotIcon?: string;
   /** Accent aura color */
   mascotColor?: string;
@@ -33,8 +33,8 @@ export interface AppHeaderProps {
  * Global Top Header with 3D Mascot and Action Triggers
  */
 export const AppHeader: React.FC<AppHeaderProps> = ({
-  agentName = 'Cooper',
-  mascotIcon = 'cooper',
+  agentName = 'Muse AI',
+  mascotIcon = 'muse',
   mascotColor = Colors.primary,
   onOpenSidebar,
   onOpenSettings,

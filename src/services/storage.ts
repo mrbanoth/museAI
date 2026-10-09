@@ -90,9 +90,9 @@ export const StorageService = {
   // Agent Profile Customization
   async getAgentProfile(): Promise<AgentProfile> {
     const defaultProfile: AgentProfile = {
-      name: 'Cooper',
+      name: 'Muse AI',
       subtitle: 'Autonomous Agent',
-      icon: 'cooper',
+      icon: 'muse',
       color: '#2563EB',
     };
 

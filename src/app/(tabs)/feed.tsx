@@ -94,7 +94,7 @@ export default function FeedScreen() {
       <View style={styles.headerRow}>
         <View>
           <Text style={styles.pageTitle}>Autonomous Feed</Text>
-          <Text style={styles.subtitle}>Real-time updates from Cooper's cloud operations</Text>
+          <Text style={styles.subtitle}>Real-time updates from Muse AI's cloud operations</Text>
         </View>
         <TouchableOpacity style={styles.refreshBtn} onPress={onRefresh} activeOpacity={0.7}>
           <HugeiconsIcon icon={RefreshIcon} size={18} color={Colors.iconDark} />

@@ -58,7 +58,7 @@ export interface SidebarDrawerProps {
 export const SidebarDrawer: React.FC<SidebarDrawerProps> = ({
   visible,
   activeChatId,
-  agentName = 'Cooper',
+  agentName = 'Muse AI',
   onClose,
   onSelectChat,
   onNewChat,

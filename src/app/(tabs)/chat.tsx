@@ -226,7 +226,7 @@ export default function ChatScreen() {
                 <View style={[styles.messageRow, styles.agentMessageRow]}>
                   <View style={[styles.bubble, styles.agentBubble, styles.loadingBubble]}>
                     <HugeiconsIcon icon={SparklesIcon} size={16} color={Colors.primary} strokeWidth={2} />
-                    <Text style={styles.loadingText}>Cooper is browsing the cloud...</Text>
+                    <Text style={styles.loadingText}>Muse AI is browsing the cloud...</Text>
                     <ActivityIndicator size="small" color={Colors.primary} style={{ marginLeft: 6 }} />
                   </View>
                 </View>
@@ -256,7 +256,7 @@ export default function ChatScreen() {
                   scrollViewRef.current?.scrollToEnd({ animated: true });
                 }, 100);
               }}
-              placeholder="Message Cooper or type URL / goal..."
+              placeholder="Message Muse AI or type URL / goal..."
               placeholderTextColor={Colors.iconMuted}
               returnKeyType="send"
               onSubmitEditing={handleSend}

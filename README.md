@@ -1,6 +1,6 @@
-# 🤖 Muse AI Clone
+# 🤖 Muse AI
 
-A pixel-perfect, universal React Native application for **Muse AI** and companion **Cooper** — an autonomous AI agent for recurring tasks, workflows, and goals.
+A pixel-perfect, universal React Native application for **Muse AI** — an autonomous AI agent for recurring tasks, workflows, and goals.
 
 Built with **Expo (SDK 57)**, **React Native 0.86**, **Expo Router**, and **TypeScript**.
 
@@ -9,7 +9,7 @@ Built with **Expo (SDK 57)**, **React Native 0.86**, **Expo Router**, and **Type
 ## ✨ Features
 
 - **Google Sign-In Authentication:** Beautiful onboarding screen with official 4-color SVG Google sign-in button.
-- **Header & 3D Character Mascot:** Sticky top header featuring Cooper's 3D portrait, floating name pill, 2-line menu with unread indicator dot, and 3-dots action sheet.
+- **Header & 3D Character Mascot:** Sticky top header featuring Muse AI's plush mascot portrait, floating name pill, 2-line menu with unread indicator dot, and 3-dots action sheet.
 - **Real-Time Interactive Chat:** Peach user bubbles, soft gray agent bubbles, date dividers, typing indicator animations, and intelligent simulated response loop.
 - **Stadium Floating Dock:** Bottom capsule dock switching between **Chat**, **Feed**, **Ideas**, **Tasks**, and **Settings**.
 - **Slide-in Session Drawer:** Main chat shortcut, searchable side chat history with unread indicators, and bottom compose toolbar.

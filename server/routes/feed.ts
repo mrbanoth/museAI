@@ -22,7 +22,7 @@ export const FEED_STORE: FeedItemData[] = [
     category: 'Autonomous Insight',
     title: 'AI Builder Cup 2026 Criteria Verified',
     summary:
-      'Cooper researched the latest judging criteria for AI Builder Cup. Identified key focus on solo agentic workflows, multi-step tool calling, and live browser automation.',
+      'Muse AI researched the latest judging criteria for AI Builder Cup. Identified key focus on solo agentic workflows, multi-step tool calling, and live browser automation.',
     timestamp: '15m ago',
     sourceUrl: 'https://news.ycombinator.com',
     replayUrl: 'https://www.browserbase.com/sessions/2c0cbbea-8f1f-4044-9a64-ada4e87cc8c0',
@@ -99,7 +99,7 @@ router.post('/run-idea', async (req: Request, res: Response) => {
       id: `feed-${Date.now()}`,
       category: '1-Tap Idea Execution',
       title: `${title} Package Generated`,
-      summary: `Cooper analyzed target sources on ${new URL(targetUrl).hostname} and generated an action-ready blueprint based on your prompt: "${prompt}".`,
+      summary: `Muse AI analyzed target sources on ${new URL(targetUrl).hostname} and generated an action-ready blueprint based on your prompt: "${prompt}".`,
       timestamp: 'Just now',
       sourceUrl: targetUrl,
       replayUrl: sessionRes.replayUrl,

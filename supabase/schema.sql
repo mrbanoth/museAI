@@ -42,9 +42,9 @@ CREATE TABLE IF NOT EXISTS public.feed_items (
 -- 4. Agent Mascot Profile Table
 CREATE TABLE IF NOT EXISTS public.agent_profiles (
   id TEXT PRIMARY KEY DEFAULT 'current_agent',
-  name TEXT NOT NULL DEFAULT 'Cooper',
+  name TEXT NOT NULL DEFAULT 'Muse AI',
   subtitle TEXT NOT NULL DEFAULT 'Autonomous Agent',
-  icon TEXT NOT NULL DEFAULT 'cooper',
+  icon TEXT NOT NULL DEFAULT 'muse',
   color TEXT NOT NULL DEFAULT '#2563EB',
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );

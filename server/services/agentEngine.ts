@@ -82,7 +82,7 @@ const agentTools = [
   },
 ];
 
-const SYSTEM_INSTRUCTION = `You are Cooper, an autonomous AI companion and proactive intelligence agent in Muse AI.
+const SYSTEM_INSTRUCTION = `You are Muse AI, an autonomous AI companion and proactive intelligence agent.
 You are warm, intelligent, concise, action-oriented, and equipped with real cloud browser automation capabilities powered by Browserbase.
 When the user asks you to check websites, read news, track prices, research topics, or perform workflows:
 - Use your tools to browse, search, or fetch data.
@@ -93,7 +93,7 @@ When the user asks you to check websites, read news, track prices, research topi
  * Executes a tool called by the LLM
  */
 async function executeTool(name: string, args: any, actions: AgentAction[]): Promise<any> {
-  console.log(`🤖 [Cooper Tool Call] ${name}(${JSON.stringify(args)})`);
+  console.log(`🤖 [Muse AI Tool Call] ${name}(${JSON.stringify(args)})`);
 
   if (name === 'browse_web_page') {
     const { url, goal } = args;
@@ -333,7 +333,7 @@ export async function processAgentChat(
   }
 
   return {
-    reply: `Hello! I'm Cooper, your autonomous AI agent companion. 🤖\n\nI can navigate live websites, extract real-time data, execute automated workflows, and research topics in real cloud Chrome browsers powered by **Browserbase**.\n\nTry asking me to:\n• *Navigate to https://news.ycombinator.com and summarize top stories*\n• *Search for latest AI model releases*\n• *Track product pricing or launch a scheduled routine*`,
+    reply: `Hello! I'm Muse AI, your autonomous AI agent companion. 🤖\n\nI can navigate live websites, extract real-time data, execute automated workflows, and research topics in real cloud Chrome browsers powered by **Browserbase**.\n\nTry asking me to:\n• *Navigate to https://news.ycombinator.com and summarize top stories*\n• *Search for latest AI model releases*\n• *Track product pricing or launch a scheduled routine*`,
     actions: [],
     suggestedTasks: [
       'Browse https://github.com/trending',

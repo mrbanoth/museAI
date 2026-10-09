@@ -11,7 +11,7 @@
 export interface ChatMessage {
   /** Unique identifier for the message */
   id: string;
-  /** Origin of the message: 'user' for current user, 'agent' for Cooper AI, or 'system' */
+  /** Origin of the message: 'user' for current user, 'agent' for Muse AI, or 'system' */
   sender: 'user' | 'agent' | 'system';
   /** Plaintext or markdown formatted message content */
   text: string;
@@ -51,7 +51,7 @@ export interface IdeaItem {
   icon: string;
   /** Prominent bold action title */
   title: string;
-  /** Descriptive preview of what Cooper will build or research */
+  /** Descriptive preview of what Muse AI will build or research */
   description: string;
   /** Full prompt automatically loaded into chat input upon selection */
   prompt: string;
