@@ -2,8 +2,9 @@
  * Tasks Tab Screen ('/(tabs)/tasks')
  *
  * Minimalist Autonomous Agent Scheduler & Goal Manager:
- * - Simple, clean UI displaying scheduled routines and goals
- * - On-click triggers simple Toast notifications
+ * - Clean UI displaying scheduled routines and goals
+ * - Live Cloud Browser Execution via Browserbase & Playwright
+ * - Direct session replay and status badges
  */
 
 import React, { useState } from 'react';
@@ -14,6 +15,9 @@ import {
   ScrollView,
   TouchableOpacity,
   Switch,
+  ActivityIndicator,
+  Platform,
+  Linking,
 } from 'react-native';
 import { HugeiconsIcon } from '@hugeicons/react-native';
 import {
@@ -21,20 +25,75 @@ import {
   Target01Icon,
   Clock01Icon,
   PlayIcon,
+  Globe02Icon,
 } from '@hugeicons/core-free-icons';
 import { Colors } from '@/constants/colors';
 import { TASK_GOALS } from '@/constants/dummyData';
 import { TaskGoalItem } from '@/types';
 import { showToast } from '@/context/ToastContext';
+import { ApiService } from '@/services/api';
+
+interface TaskWithSession extends TaskGoalItem {
+  lastSessionId?: string;
+  lastReplayUrl?: string;
+  isRunning?: boolean;
+}
 
 export default function TasksScreen() {
-  const [tasks, setTasks] = useState<TaskGoalItem[]>(TASK_GOALS);
+  const [tasks, setTasks] = useState<TaskWithSession[]>(TASK_GOALS);
 
   const handleToggle = (id: string, title: string) => {
     setTasks((prev) =>
       prev.map((t) => (t.id === id ? { ...t, status: t.status === 'active' ? 'paused' : 'active' } : t))
     );
     showToast(`${title} status updated`);
+  };
+
+  const handleRunTask = async (task: TaskWithSession) => {
+    setTasks((prev) =>
+      prev.map((t) => (t.id === task.id ? { ...t, isRunning: true } : t))
+    );
+    showToast(`Launching cloud browser for "${task.title}"...`);
+
+    try {
+      const res = await ApiService.runTask(task.id, task.title);
+
+      if (res.success) {
+        showToast(`Completed! Replay created.`);
+        setTasks((prev) =>
+          prev.map((t) =>
+            t.id === task.id
+              ? {
+                  ...t,
+                  isRunning: false,
+                  runsCount: t.runsCount + 1,
+                  lastSessionId: res.sessionId,
+                  lastReplayUrl: res.replayUrl,
+                }
+              : t
+          )
+        );
+      } else {
+        showToast(`Failed: ${res.message || 'Unknown error'}`);
+        setTasks((prev) =>
+          prev.map((t) => (t.id === task.id ? { ...t, isRunning: false } : t))
+        );
+      }
+    } catch (e: any) {
+      showToast('Execution error');
+      setTasks((prev) =>
+        prev.map((t) => (t.id === task.id ? { ...t, isRunning: false } : t))
+      );
+    }
+  };
+
+  const handleOpenReplay = (url?: string) => {
+    if (!url) return;
+    if (Platform.OS === 'web') {
+      window.open(url, '_blank');
+    } else {
+      Linking.openURL(url).catch(() => showToast(`Opening: ${url}`));
+    }
   };
 
   return (
@@ -93,6 +152,17 @@ export default function TasksScreen() {
                     <Text style={styles.metaDot}>•</Text>
                     <Text style={styles.executionsText}>{task.runsCount} runs</Text>
                   </View>
+
+                  {/* Cloud Browser Replay Link if run */}
+                  {task.lastReplayUrl && (
+                    <TouchableOpacity
+                      style={styles.replayBadge}
+                      onPress={() => handleOpenReplay(task.lastReplayUrl)}
+                      activeOpacity={0.7}>
+                      <HugeiconsIcon icon={Globe02Icon} size={12} color={Colors.primary} strokeWidth={2} />
+                      <Text style={styles.replayBadgeText}>Browserbase Replay</Text>
+                    </TouchableOpacity>
+                  )}
                 </View>
 
                 {/* Right Controls: Switch & Run Button */}
@@ -105,16 +175,23 @@ export default function TasksScreen() {
                   />
 
                   <TouchableOpacity
-                    style={styles.runManualBtn}
-                    onPress={() => showToast(`Running ${task.title}`)}
+                    style={[styles.runManualBtn, task.isRunning && styles.runningBtn]}
+                    onPress={() => handleRunTask(task)}
+                    disabled={task.isRunning}
                     activeOpacity={0.75}>
-                    <HugeiconsIcon
-                      icon={PlayIcon}
-                      size={12}
-                      color={Colors.primary}
-                      strokeWidth={2.4}
-                    />
-                    <Text style={styles.runManualText}>Run</Text>
+                    {task.isRunning ? (
+                      <ActivityIndicator size="small" color={Colors.primary} />
+                    ) : (
+                      <>
+                        <HugeiconsIcon
+                          icon={PlayIcon}
+                          size={12}
+                          color={Colors.primary}
+                          strokeWidth={2.4}
+                        />
+                        <Text style={styles.runManualText}>Run</Text>
+                      </>
+                    )}
                   </TouchableOpacity>
                 </View>
               </TouchableOpacity>
@@ -223,6 +300,22 @@ const styles = StyleSheet.create({
     color: '#707070',
     fontWeight: '500',
   },
+  replayBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: Colors.primarySubtle,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+    marginTop: 8,
+    alignSelf: 'flex-start',
+  },
+  replayBadgeText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: Colors.primary,
+  },
   actionsCol: {
     alignItems: 'flex-end',
     gap: 8,
@@ -237,6 +330,12 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     borderRadius: 8,
     gap: 4,
+    minWidth: 54,
+    justifyContent: 'center',
+  },
+  runningBtn: {
+    backgroundColor: '#F1F5F9',
+    borderColor: '#E2E8F0',
   },
   runManualText: {
     fontSize: 12,

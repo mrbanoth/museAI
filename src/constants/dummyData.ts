@@ -148,6 +148,15 @@ export const SETTINGS_PLAN_DATA: PlanData = {
  */
 export const SETTINGS_CONNECTORS: ConnectorItem[] = [
   {
+    id: 'conn-bb',
+    name: 'Browserbase Cloud Browsers',
+    description: 'Autonomous Chrome sessions, Stagehand & live replays',
+    iconBg: '#0066FF',
+    connected: true,
+    category: 'Cloud Automation',
+    accountEmail: 'Connected via BROWSERBASE_API_KEY',
+  },
+  {
     id: 'conn-1',
     name: 'Google Workspace',
     description: 'Gmail, Calendar events & Google Drive sync',

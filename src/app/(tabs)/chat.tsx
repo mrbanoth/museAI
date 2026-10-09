@@ -1,9 +1,10 @@
 /**
  * Chat Tab Screen ('/(tabs)/chat')
  *
- * Minimalist, clean conversational companion UI:
+ * Minimalist, clean conversational companion UI with real-time Browserbase Cloud Agent:
  * - Scrollable message thread
  * - Floating prompt bar (+ attachment, input box, voice mic, send action)
+ * - Cloud Browser Live View & Replay badges
  * - Simple on-click Toast triggers
  */
 
@@ -19,6 +20,8 @@ import {
   Platform,
   Keyboard,
   TouchableWithoutFeedback,
+  ActivityIndicator,
+  Linking,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { HugeiconsIcon } from '@hugeicons/react-native';
@@ -26,15 +29,20 @@ import {
   Add01Icon,
   Mic01Icon,
   SentIcon,
+  Globe02Icon,
+  PlayIcon,
+  SparklesIcon,
 } from '@hugeicons/core-free-icons';
 import { Colors } from '@/constants/colors';
 import { INITIAL_CHAT_MESSAGES } from '@/constants/dummyData';
 import { ChatMessage } from '@/types';
 import { showToast } from '@/context/ToastContext';
+import { ApiService } from '@/services/api';
 
 export default function ChatScreen() {
   const [messages, setMessages] = useState<ChatMessage[]>(INITIAL_CHAT_MESSAGES);
   const [inputText, setInputText] = useState('');
+  const [isProcessing, setIsProcessing] = useState(false);
   const scrollViewRef = useRef<ScrollView>(null);
   const insets = useSafeAreaInsets();
 
@@ -43,7 +51,7 @@ export default function ChatScreen() {
 
   useEffect(() => {
     scrollViewRef.current?.scrollToEnd({ animated: true });
-  }, [messages]);
+  }, [messages, isProcessing]);
 
   // Scroll to bottom when keyboard appears
   useEffect(() => {
@@ -56,9 +64,9 @@ export default function ChatScreen() {
     return () => sub.remove();
   }, []);
 
-  const handleSend = () => {
+  const handleSend = async () => {
     const text = inputText.trim();
-    if (!text) return;
+    if (!text || isProcessing) return;
 
     const userMsg: ChatMessage = {
       id: `msg-${Date.now()}`,
@@ -69,7 +77,35 @@ export default function ChatScreen() {
 
     setMessages((prev) => [...prev, userMsg]);
     setInputText('');
-    showToast('Message sent');
+    setIsProcessing(true);
+
+    try {
+      const history = messages.map((m) => ({ sender: m.sender, text: m.text }));
+      const res = await ApiService.sendMessage(text, history);
+
+      const agentMsg: ChatMessage = {
+        id: `agent-${Date.now()}`,
+        sender: 'agent',
+        text: res.data?.reply || 'Done!',
+        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        actions: res.data?.actions,
+      };
+
+      setMessages((prev) => [...prev, agentMsg]);
+    } catch (err: any) {
+      showToast('Failed to reach agent');
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  const handleOpenLink = (url?: string) => {
+    if (!url) return;
+    if (Platform.OS === 'web') {
+      window.open(url, '_blank');
+    } else {
+      Linking.openURL(url).catch(() => showToast(`Opening: ${url}`));
+    }
   };
 
   return (
@@ -99,15 +135,15 @@ export default function ChatScreen() {
               {messages.map((msg) => {
                 const isUser = msg.sender === 'user';
                 return (
-                  <TouchableOpacity
+                  <View
                     key={msg.id}
-                    activeOpacity={0.8}
-                    onPress={() => showToast(msg.text)}
                     style={[
                       styles.messageRow,
                       isUser ? styles.userMessageRow : styles.agentMessageRow,
                     ]}>
-                    <View
+                    <TouchableOpacity
+                      activeOpacity={0.85}
+                      onPress={() => showToast(msg.text)}
                       style={[
                         styles.bubble,
                         isUser ? styles.userBubble : styles.agentBubble,
@@ -119,10 +155,59 @@ export default function ChatScreen() {
                         ]}>
                         {msg.text}
                       </Text>
-                    </View>
-                  </TouchableOpacity>
+
+                      {/* Cloud Browser Action Badges */}
+                      {msg.actions && msg.actions.length > 0 && (
+                        <View style={styles.actionsContainer}>
+                          {msg.actions.map((act, i) => (
+                            <View key={`act-${i}`} style={styles.actionCard}>
+                              <View style={styles.actionHeader}>
+                                <HugeiconsIcon
+                                  icon={Globe02Icon}
+                                  size={16}
+                                  color={Colors.primary}
+                                  strokeWidth={2}
+                                />
+                                <Text style={styles.actionTitle} numberOfLines={1}>
+                                  {act.title}
+                                </Text>
+                              </View>
+
+                              {act.replayUrl && (
+                                <TouchableOpacity
+                                  style={styles.sessionLinkBtn}
+                                  onPress={() => handleOpenLink(act.replayUrl)}
+                                  activeOpacity={0.7}>
+                                  <HugeiconsIcon
+                                    icon={PlayIcon}
+                                    size={13}
+                                    color={Colors.primary}
+                                    strokeWidth={2.4}
+                                  />
+                                  <Text style={styles.sessionLinkText}>
+                                    Watch Live / Replay
+                                  </Text>
+                                </TouchableOpacity>
+                              )}
+                            </View>
+                          ))}
+                        </View>
+                      )}
+                    </TouchableOpacity>
+                  </View>
                 );
               })}
+
+              {/* Processing indicator */}
+              {isProcessing && (
+                <View style={[styles.messageRow, styles.agentMessageRow]}>
+                  <View style={[styles.bubble, styles.agentBubble, styles.loadingBubble]}>
+                    <HugeiconsIcon icon={SparklesIcon} size={16} color={Colors.primary} strokeWidth={2} />
+                    <Text style={styles.loadingText}>Cooper is browsing the cloud...</Text>
+                    <ActivityIndicator size="small" color={Colors.primary} style={{ marginLeft: 6 }} />
+                  </View>
+                </View>
+              )}
             </View>
           </TouchableWithoutFeedback>
         </ScrollView>
@@ -148,7 +233,7 @@ export default function ChatScreen() {
                   scrollViewRef.current?.scrollToEnd({ animated: true });
                 }, 100);
               }}
-              placeholder="Message in Start a health goal"
+              placeholder="Message Cooper or type URL / goal..."
               placeholderTextColor={Colors.iconMuted}
               returnKeyType="send"
               onSubmitEditing={handleSend}
@@ -225,7 +310,7 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-start',
   },
   bubble: {
-    maxWidth: '82%',
+    maxWidth: '85%',
     paddingHorizontal: 16,
     paddingVertical: 12,
     borderRadius: 20,
@@ -250,6 +335,55 @@ const styles = StyleSheet.create({
   agentBubbleText: {
     color: Colors.iconDark,
     fontWeight: '400',
+  },
+  actionsContainer: {
+    marginTop: 10,
+    gap: 8,
+  },
+  actionCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    padding: 10,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  actionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 6,
+  },
+  actionTitle: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: Colors.textPrimary,
+    flex: 1,
+  },
+  sessionLinkBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    backgroundColor: Colors.primarySubtle,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 8,
+    alignSelf: 'flex-start',
+  },
+  sessionLinkText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: Colors.primary,
+  },
+  loadingBubble: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingVertical: 10,
+  },
+  loadingText: {
+    fontSize: 14,
+    color: Colors.textSecondary,
+    fontStyle: 'italic',
   },
   inputWrapper: {
     paddingHorizontal: 16,

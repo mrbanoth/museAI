@@ -17,6 +17,16 @@ export interface ChatMessage {
   text: string;
   /** Formatted timestamp display string (e.g. "3:35 PM") */
   timestamp: string;
+  /** Optional Cloud Browser / Agent Actions associated with this response */
+  actions?: Array<{
+    type: string;
+    title: string;
+    sessionId?: string;
+    liveViewUrl?: string;
+    replayUrl?: string;
+    url?: string;
+    details?: any;
+  }>;
 }
 
 /**
