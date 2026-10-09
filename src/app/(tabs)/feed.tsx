@@ -30,6 +30,7 @@ import { Colors } from '@/constants/colors';
 import { FeedItem } from '@/types';
 import { showToast } from '@/context/ToastContext';
 import { ApiService } from '@/services/api';
+import { LiveBrowserModal } from '@/components/common';
 
 const CATEGORIES = ['All', 'Autonomous Insight', '1-Tap Idea Execution', 'Goal Execution'];
 
@@ -39,6 +40,11 @@ export default function FeedScreen() {
   const [selectedCategory, setSelectedCategory] = useState('All');
   const [refreshing, setRefreshing] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [liveModal, setLiveModal] = useState<{ visible: boolean; url: string | null; title?: string }>({
+    visible: false,
+    url: null,
+    title: undefined,
+  });
 
   const loadFeed = useCallback(async () => {
     try {
@@ -63,13 +69,13 @@ export default function FeedScreen() {
     loadFeed();
   };
 
-  const handleOpenReplay = (url?: string) => {
+  const handleOpenReplay = (url?: string, title?: string) => {
     if (!url) return;
-    if (Platform.OS === 'web') {
-      window.open(url, '_blank');
-    } else {
-      Linking.openURL(url).catch(() => showToast(`Opening: ${url}`));
-    }
+    setLiveModal({
+      visible: true,
+      url,
+      title: title || 'Browserbase Cloud Replay',
+    });
   };
 
   const handleDiscussInChat = (item: FeedItem) => {
@@ -172,7 +178,7 @@ export default function FeedScreen() {
                   {item.replayUrl && (
                     <TouchableOpacity
                       style={styles.replayBtn}
-                      onPress={() => handleOpenReplay(item.replayUrl)}
+                      onPress={() => handleOpenReplay(item.replayUrl, item.title)}
                       activeOpacity={0.75}>
                       <HugeiconsIcon icon={Globe02Icon} size={13} color={Colors.primary} strokeWidth={2} />
                       <Text style={styles.replayBtnText}>Watch Cloud Replay</Text>
@@ -192,6 +198,14 @@ export default function FeedScreen() {
           )}
         </ScrollView>
       )}
+
+      {/* Embedded Live Cloud Browser Modal */}
+      <LiveBrowserModal
+        visible={liveModal.visible}
+        url={liveModal.url}
+        title={liveModal.title}
+        onClose={() => setLiveModal({ visible: false, url: null })}
+      />
     </View>
   );
 }

@@ -38,11 +38,17 @@ import { INITIAL_CHAT_MESSAGES } from '@/constants/dummyData';
 import { ChatMessage } from '@/types';
 import { showToast } from '@/context/ToastContext';
 import { ApiService } from '@/services/api';
+import { LiveBrowserModal } from '@/components/common';
 
 export default function ChatScreen() {
   const [messages, setMessages] = useState<ChatMessage[]>(INITIAL_CHAT_MESSAGES);
   const [inputText, setInputText] = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
+  const [liveModal, setLiveModal] = useState<{ visible: boolean; url: string | null; title?: string }>({
+    visible: false,
+    url: null,
+    title: undefined,
+  });
   const scrollViewRef = useRef<ScrollView>(null);
   const insets = useSafeAreaInsets();
 
@@ -116,13 +122,13 @@ export default function ChatScreen() {
     }
   };
 
-  const handleOpenLink = (url?: string) => {
+  const handleOpenLink = (url?: string, title?: string) => {
     if (!url) return;
-    if (Platform.OS === 'web') {
-      window.open(url, '_blank');
-    } else {
-      Linking.openURL(url).catch(() => showToast(`Opening: ${url}`));
-    }
+    setLiveModal({
+      visible: true,
+      url,
+      title: title || 'Browserbase Cloud Live / Replay',
+    });
   };
 
   return (
@@ -193,7 +199,7 @@ export default function ChatScreen() {
                               {act.replayUrl && (
                                 <TouchableOpacity
                                   style={styles.sessionLinkBtn}
-                                  onPress={() => handleOpenLink(act.replayUrl)}
+                                  onPress={() => handleOpenLink(act.replayUrl, act.title)}
                                   activeOpacity={0.7}>
                                   <HugeiconsIcon
                                     icon={PlayIcon}
@@ -275,6 +281,14 @@ export default function ChatScreen() {
           </View>
         </View>
       </View>
+
+      {/* Embedded Live Cloud Browser Modal */}
+      <LiveBrowserModal
+        visible={liveModal.visible}
+        url={liveModal.url}
+        title={liveModal.title}
+        onClose={() => setLiveModal({ visible: false, url: null })}
+      />
     </KeyboardAvoidingView>
   );
 }

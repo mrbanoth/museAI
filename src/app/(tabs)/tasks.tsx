@@ -32,6 +32,7 @@ import { TASK_GOALS } from '@/constants/dummyData';
 import { TaskGoalItem } from '@/types';
 import { showToast } from '@/context/ToastContext';
 import { ApiService } from '@/services/api';
+import { LiveBrowserModal } from '@/components/common';
 
 interface TaskWithSession extends TaskGoalItem {
   lastSessionId?: string;
@@ -41,6 +42,11 @@ interface TaskWithSession extends TaskGoalItem {
 
 export default function TasksScreen() {
   const [tasks, setTasks] = useState<TaskWithSession[]>(TASK_GOALS);
+  const [liveModal, setLiveModal] = useState<{ visible: boolean; url: string | null; title?: string }>({
+    visible: false,
+    url: null,
+    title: undefined,
+  });
 
   // Load saved tasks
   React.useEffect(() => {
@@ -102,13 +108,13 @@ export default function TasksScreen() {
     }
   };
 
-  const handleOpenReplay = (url?: string) => {
+  const handleOpenReplay = (url?: string, title?: string) => {
     if (!url) return;
-    if (Platform.OS === 'web') {
-      window.open(url, '_blank');
-    } else {
-      Linking.openURL(url).catch(() => showToast(`Opening: ${url}`));
-    }
+    setLiveModal({
+      visible: true,
+      url,
+      title: title || 'Browserbase Session Replay',
+    });
   };
 
   return (
@@ -172,7 +178,7 @@ export default function TasksScreen() {
                   {task.lastReplayUrl && (
                     <TouchableOpacity
                       style={styles.replayBadge}
-                      onPress={() => handleOpenReplay(task.lastReplayUrl)}
+                      onPress={() => handleOpenReplay(task.lastReplayUrl, task.title)}
                       activeOpacity={0.7}>
                       <HugeiconsIcon icon={Globe02Icon} size={12} color={Colors.primary} strokeWidth={2} />
                       <Text style={styles.replayBadgeText}>Browserbase Replay</Text>
@@ -216,6 +222,14 @@ export default function TasksScreen() {
           );
         })}
       </ScrollView>
+
+      {/* Embedded Live Cloud Browser Modal */}
+      <LiveBrowserModal
+        visible={liveModal.visible}
+        url={liveModal.url}
+        title={liveModal.title}
+        onClose={() => setLiveModal({ visible: false, url: null })}
+      />
     </View>
   );
 }
