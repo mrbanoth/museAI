@@ -1,14 +1,14 @@
 /**
  * Chat Tab Screen ('/(tabs)/chat')
  *
- * Minimalist, clean conversational companion UI with real-time Browserbase Cloud Agent:
- * - Scrollable message thread
- * - Floating prompt bar (+ attachment, input box, voice mic, send action)
- * - Cloud Browser Live View & Replay badges
- * - Simple on-click Toast triggers
+ * Fully dynamic conversational companion with real-time multi-session chat engine:
+ * - Dynamic session loading & title auto-naming
+ * - Zero static dummy clutter; clean empty state with 1-tap starter chips
+ * - Real-time Browserbase Cloud Live View & Replay execution
+ * - (+) Action Sheet for live browsing, web searching, and session clearing
  */
 
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -21,9 +21,11 @@ import {
   Keyboard,
   TouchableWithoutFeedback,
   ActivityIndicator,
-  Linking,
+  Modal,
+  Image,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useFocusEffect } from 'expo-router';
 import { HugeiconsIcon } from '@hugeicons/react-native';
 import {
   Add01Icon,
@@ -32,12 +34,16 @@ import {
   Globe02Icon,
   PlayIcon,
   SparklesIcon,
+  Search01Icon,
+  Delete02Icon,
+  Idea01Icon,
+  Cancel01Icon,
 } from '@hugeicons/core-free-icons';
 import { Colors } from '@/constants/colors';
-import { INITIAL_CHAT_MESSAGES } from '@/constants/dummyData';
 import { ChatMessage } from '@/types';
 import { showToast } from '@/context/ToastContext';
 import { ApiService } from '@/services/api';
+import { StorageService } from '@/services/storage';
 import {
   LiveBrowserModal,
   FinanceCard,
@@ -46,37 +52,62 @@ import {
   DocumentCard,
 } from '@/components/common';
 
+const QUICK_PROMPTS = [
+  {
+    icon: Search01Icon,
+    title: 'Web Search',
+    prompt: 'Search the web for the latest artificial intelligence agent updates today',
+  },
+  {
+    icon: Globe02Icon,
+    title: 'Live Cloud Browser',
+    prompt: 'Open https://news.ycombinator.com in cloud browser and summarize top 3 posts',
+  },
+  {
+    icon: SparklesIcon,
+    title: 'Market Analysis',
+    prompt: 'Give me a concise analysis of top tech company earnings and market sentiment',
+  },
+  {
+    icon: Idea01Icon,
+    title: 'Workflow Automation',
+    prompt: 'Help me design an autonomous daily routine to track competitors and prices',
+  },
+];
+
 export default function ChatScreen() {
-  const [messages, setMessages] = useState<ChatMessage[]>(INITIAL_CHAT_MESSAGES);
+  const [activeSessionId, setActiveSessionId] = useState('main-chat');
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [inputText, setInputText] = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
+  const [showAttachMenu, setShowAttachMenu] = useState(false);
   const [liveModal, setLiveModal] = useState<{ visible: boolean; url: string | null; title?: string }>({
     visible: false,
     url: null,
     title: undefined,
   });
+
   const scrollViewRef = useRef<ScrollView>(null);
   const insets = useSafeAreaInsets();
 
-  // Load persisted chat messages on mount
-  useEffect(() => {
-    (async () => {
-      const { StorageService } = await import('@/services/storage');
-      const saved = await StorageService.getChatMessages();
-      if (saved && saved.length > 0) {
-        setMessages(saved);
-      }
-    })();
+  // Load messages whenever screen comes into focus or session switches
+  const loadActiveSessionMessages = useCallback(async () => {
+    const activeId = await StorageService.getActiveSessionId();
+    setActiveSessionId(activeId);
+    const sessionMessages = await StorageService.getSessionMessages(activeId);
+    setMessages(sessionMessages || []);
   }, []);
 
-  // Calculate header height offset for iOS KeyboardAvoidingView (SafeAreaView top + AppHeader height)
-  const headerOffset = Platform.OS === 'ios' ? insets.top + 98 : 0;
+  useFocusEffect(
+    useCallback(() => {
+      loadActiveSessionMessages();
+    }, [loadActiveSessionMessages])
+  );
 
   useEffect(() => {
     scrollViewRef.current?.scrollToEnd({ animated: true });
   }, [messages, isProcessing]);
 
-  // Scroll to bottom when keyboard appears
   useEffect(() => {
     const showEvent = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
     const sub = Keyboard.addListener(showEvent, () => {
@@ -87,8 +118,8 @@ export default function ChatScreen() {
     return () => sub.remove();
   }, []);
 
-  const handleSend = async () => {
-    const text = inputText.trim();
+  const handleSend = async (overridePrompt?: string) => {
+    const text = (typeof overridePrompt === 'string' ? overridePrompt : inputText).trim();
     if (!text || isProcessing) return;
 
     const userMsg: ChatMessage = {
@@ -103,8 +134,22 @@ export default function ChatScreen() {
     setInputText('');
     setIsProcessing(true);
 
-    const { StorageService } = await import('@/services/storage');
-    await StorageService.saveChatMessages(updatedWithUser);
+    const activeId = await StorageService.getActiveSessionId();
+    const allSessions = await StorageService.getAllSessions();
+    const currentSession = allSessions.find((s) => s.id === activeId);
+
+    // Auto-rename session if it's the default name
+    let newTitle: string | undefined = undefined;
+    if (
+      currentSession &&
+      (currentSession.title === 'New chat' ||
+        currentSession.title === 'Main chat' ||
+        !currentSession.title)
+    ) {
+      newTitle = text.length > 26 ? `${text.slice(0, 26)}...` : text;
+    }
+
+    await StorageService.saveSessionMessages(activeId, updatedWithUser, newTitle);
 
     try {
       const history = updatedWithUser.map((m) => ({ sender: m.sender, text: m.text }));
@@ -113,16 +158,25 @@ export default function ChatScreen() {
       const agentMsg: ChatMessage = {
         id: `agent-${Date.now()}`,
         sender: 'agent',
-        text: res.data?.reply || 'Done!',
+        text: res.data?.reply || 'Task completed.',
         timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
         actions: res.data?.actions,
       };
 
       const finalMessages = [...updatedWithUser, agentMsg];
       setMessages(finalMessages);
-      await StorageService.saveChatMessages(finalMessages);
+      await StorageService.saveSessionMessages(activeId, finalMessages, newTitle);
     } catch (err: any) {
-      showToast('Failed to reach agent');
+      const errorMsg: ChatMessage = {
+        id: `err-${Date.now()}`,
+        sender: 'agent',
+        text: "I couldn't reach the agent backend server. Please verify the backend is running at port 3001.",
+        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      };
+      const finalWithErr = [...updatedWithUser, errorMsg];
+      setMessages(finalWithErr);
+      await StorageService.saveSessionMessages(activeId, finalWithErr, newTitle);
+      showToast('Agent connection failed');
     } finally {
       setIsProcessing(false);
     }
@@ -133,9 +187,19 @@ export default function ChatScreen() {
     setLiveModal({
       visible: true,
       url,
-      title: title || 'Browserbase Cloud Live / Replay',
+      title: title || 'Browserbase Cloud Live View',
     });
   };
+
+  const handleClearCurrentChat = async () => {
+    await StorageService.saveSessionMessages(activeSessionId, []);
+    setMessages([]);
+    setShowAttachMenu(false);
+    showToast('Conversation cleared');
+  };
+
+  const headerOffset = Platform.OS === 'ios' ? insets.top + 98 : 0;
+  const hasUserMessages = messages.some((m) => m.sender === 'user');
 
   return (
     <KeyboardAvoidingView
@@ -153,14 +217,54 @@ export default function ChatScreen() {
           showsVerticalScrollIndicator={false}>
           <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
             <View style={styles.scrollInner}>
-              {/* Centered Date Badge */}
-              <View style={styles.dateBadgeContainer}>
-                <View style={styles.dateBadge}>
-                  <Text style={styles.dateBadgeText}>Today</Text>
-                </View>
-              </View>
+              {/* Empty / Welcome State with Quick Action Chips */}
+              {!hasUserMessages && (
+                <View style={styles.emptyWelcomeContainer}>
+                  <View style={styles.welcomeMascotAura}>
+                    <Image
+                      source={require('../../../assets/images/muse_mascot.png')}
+                      style={styles.welcomeMascot}
+                      resizeMode="cover"
+                    />
+                  </View>
+                  <Text style={styles.welcomeTitle}>What can I do for you?</Text>
+                  <Text style={styles.welcomeSubtitle}>
+                    Ask anything, browse live cloud sessions, or run autonomous workflows.
+                  </Text>
 
-              {/* Messages */}
+                  {/* 1-Tap Quick Action Prompt Chips */}
+                  <View style={styles.promptChipsGrid}>
+                    {QUICK_PROMPTS.map((qp, idx) => (
+                      <TouchableOpacity
+                        key={`qp-${idx}`}
+                        style={styles.promptChip}
+                        onPress={() => handleSend(qp.prompt)}
+                        activeOpacity={0.75}>
+                        <View style={styles.promptChipIcon}>
+                          <HugeiconsIcon icon={qp.icon} size={16} color={Colors.primary} strokeWidth={2} />
+                        </View>
+                        <View style={styles.promptChipContent}>
+                          <Text style={styles.promptChipTitle}>{qp.title}</Text>
+                          <Text style={styles.promptChipDesc} numberOfLines={2}>
+                            {qp.prompt}
+                          </Text>
+                        </View>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                </View>
+              )}
+
+              {/* Centered Date Badge */}
+              {hasUserMessages && (
+                <View style={styles.dateBadgeContainer}>
+                  <View style={styles.dateBadge}>
+                    <Text style={styles.dateBadgeText}>Today</Text>
+                  </View>
+                </View>
+              )}
+
+              {/* Messages Thread */}
               {messages.map((msg) => {
                 const isUser = msg.sender === 'user';
                 return (
@@ -171,7 +275,7 @@ export default function ChatScreen() {
                       isUser ? styles.userMessageRow : styles.agentMessageRow,
                     ]}>
                     <View style={styles.bubbleContainer}>
-                      {/* Chat text bubble if text is present */}
+                      {/* Chat Bubble */}
                       {msg.text ? (
                         <TouchableOpacity
                           activeOpacity={0.85}
@@ -190,28 +294,28 @@ export default function ChatScreen() {
                         </TouchableOpacity>
                       ) : null}
 
-                      {/* Attached User Emoji Reaction Badge */}
+                      {/* User Reaction Badge */}
                       {isUser && msg.reaction && (
                         <View style={styles.reactionBadge}>
                           <Text style={styles.reactionText}>{msg.reaction}</Text>
                         </View>
                       )}
 
-                      {/* Rich Embedded Widgets */}
+                      {/* Embedded Widget Cards */}
                       {msg.widget?.type === 'finance' && (
                         <FinanceCard
                           onOpenTracker={() => showToast('Opened Finance Tracker')}
-                          onOptions={() => showToast('Finance settings')}
+                          onOptions={() => showToast('Finance options')}
                         />
                       )}
 
                       {msg.widget?.type === 'browser' && (
                         <BrowserCard
-                          statusText={msg.widget.data?.statusText || 'Selecting seats...'}
+                          statusText={msg.widget.data?.statusText || 'Executing in cloud...'}
                           onOpenBrowser={() =>
                             handleOpenLink(
-                              'https://www.browserbase.com/sessions/45ea61b8-1a58-405e-8391-6955f71a9e1a',
-                              'Movie Tickets Browser'
+                              'https://www.browserbase.com',
+                              'Cloud Browser View'
                             )
                           }
                         />
@@ -219,26 +323,26 @@ export default function ChatScreen() {
 
                       {msg.widget?.type === 'checkout' && (
                         <CheckoutCard
-                          productTitle={msg.widget.data?.productTitle || 'Glide Pro Stroller'}
-                          price={msg.widget.data?.price || '$80.00'}
-                          regularPrice={msg.widget.data?.regularPrice || '$320.00'}
-                          total={msg.widget.data?.total || '$80'}
-                          onAllow={() => showToast('Order approved! Placing order on merchant...')}
-                          onDeny={() => showToast('Order denied.')}
+                          productTitle={msg.widget.data?.productTitle || 'Item'}
+                          price={msg.widget.data?.price || '$0.00'}
+                          regularPrice={msg.widget.data?.regularPrice || '$0.00'}
+                          total={msg.widget.data?.total || '$0'}
+                          onAllow={() => showToast('Order approved')}
+                          onDeny={() => showToast('Order cancelled')}
                           onReviewOrder={() =>
-                            handleOpenLink('https://www.google.com/search?q=Glide+Pro+Stroller', 'Review Order')
+                            handleOpenLink('https://www.google.com', 'Review Order')
                           }
                         />
                       )}
 
                       {msg.widget?.type === 'document' && (
                         <DocumentCard
-                          onOpenDoc={() => showToast('Opening Field Trip Permission Slip PDF')}
+                          onOpenDoc={() => showToast('Opening document')}
                           onOptions={() => showToast('Document options')}
                         />
                       )}
 
-                      {/* Cloud Browser Action Badges */}
+                      {/* Live Browserbase Cloud Actions */}
                       {msg.actions && msg.actions.length > 0 && !msg.widget && (
                         <View style={styles.actionsContainer}>
                           {msg.actions.map((act, i) => (
@@ -285,7 +389,7 @@ export default function ChatScreen() {
                 <View style={[styles.messageRow, styles.agentMessageRow]}>
                   <View style={[styles.bubble, styles.agentBubble, styles.loadingBubble]}>
                     <HugeiconsIcon icon={SparklesIcon} size={16} color={Colors.primary} strokeWidth={2} />
-                    <Text style={styles.loadingText}>Muse AI is browsing the cloud...</Text>
+                    <Text style={styles.loadingText}>Muse AI is reasoning and executing...</Text>
                     <ActivityIndicator size="small" color={Colors.primary} style={{ marginLeft: 6 }} />
                   </View>
                 </View>
@@ -297,11 +401,12 @@ export default function ChatScreen() {
         {/* Floating Input Pill */}
         <View style={styles.inputWrapper}>
           <View style={styles.inputBar}>
-            {/* Plus Attach Button */}
+            {/* Plus Attach / Actions Button */}
             <TouchableOpacity
               style={styles.circleBtn}
-              onPress={() => showToast('Attach file')}
-              activeOpacity={0.7}>
+              onPress={() => setShowAttachMenu(true)}
+              activeOpacity={0.7}
+              accessibilityLabel="Add attachment or action">
               <HugeiconsIcon icon={Add01Icon} size={20} color={Colors.iconDark} strokeWidth={2.2} />
             </TouchableOpacity>
 
@@ -318,14 +423,14 @@ export default function ChatScreen() {
               placeholder="Message Muse AI or type URL / goal..."
               placeholderTextColor={Colors.iconMuted}
               returnKeyType="send"
-              onSubmitEditing={handleSend}
+              onSubmitEditing={() => handleSend()}
             />
 
-            {/* Right Action: Voice or Send */}
+            {/* Right Action: Send Button */}
             {inputText.trim().length > 0 ? (
               <TouchableOpacity
                 style={[styles.circleBtn, styles.sendBtn]}
-                onPress={handleSend}
+                onPress={() => handleSend()}
                 activeOpacity={0.8}>
                 <HugeiconsIcon icon={SentIcon} size={18} color={Colors.white} strokeWidth={2.4} />
               </TouchableOpacity>
@@ -340,6 +445,63 @@ export default function ChatScreen() {
           </View>
         </View>
       </View>
+
+      {/* Quick Action (+) Modal Sheet */}
+      <Modal
+        visible={showAttachMenu}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowAttachMenu(false)}>
+        <TouchableOpacity
+          style={styles.modalOverlay}
+          activeOpacity={1}
+          onPress={() => setShowAttachMenu(false)}>
+          <View style={styles.sheetContainer}>
+            <View style={styles.sheetHeader}>
+              <Text style={styles.sheetTitle}>Agent Actions</Text>
+              <TouchableOpacity onPress={() => setShowAttachMenu(false)}>
+                <HugeiconsIcon icon={Cancel01Icon} size={20} color={Colors.iconMuted} />
+              </TouchableOpacity>
+            </View>
+
+            <TouchableOpacity
+              style={styles.sheetOption}
+              onPress={() => {
+                setShowAttachMenu(false);
+                handleSend('Open https://google.com in live cloud browser and check headlines');
+              }}>
+              <HugeiconsIcon icon={Globe02Icon} size={20} color={Colors.primary} />
+              <View style={styles.sheetOptionTextWrap}>
+                <Text style={styles.sheetOptionTitle}>Browse Cloud Web Page</Text>
+                <Text style={styles.sheetOptionDesc}>Launch live Browserbase session</Text>
+              </View>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.sheetOption}
+              onPress={() => {
+                setShowAttachMenu(false);
+                handleSend('Search the web for the latest updates today');
+              }}>
+              <HugeiconsIcon icon={Search01Icon} size={20} color="#10B981" />
+              <View style={styles.sheetOptionTextWrap}>
+                <Text style={styles.sheetOptionTitle}>Deep Web Search</Text>
+                <Text style={styles.sheetOptionDesc}>Real-time information gathering</Text>
+              </View>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.sheetOption, { borderBottomWidth: 0 }]}
+              onPress={handleClearCurrentChat}>
+              <HugeiconsIcon icon={Delete02Icon} size={20} color="#EF4444" />
+              <View style={styles.sheetOptionTextWrap}>
+                <Text style={[styles.sheetOptionTitle, { color: '#EF4444' }]}>Clear Conversation</Text>
+                <Text style={styles.sheetOptionDesc}>Reset active chat history</Text>
+              </View>
+            </TouchableOpacity>
+          </View>
+        </TouchableOpacity>
+      </Modal>
 
       {/* Embedded Live Cloud Browser Modal */}
       <LiveBrowserModal
@@ -372,6 +534,76 @@ const styles = StyleSheet.create({
   },
   scrollInner: {
     flexGrow: 1,
+  },
+  emptyWelcomeContainer: {
+    alignItems: 'center',
+    paddingVertical: 20,
+    paddingHorizontal: 8,
+  },
+  welcomeMascotAura: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: '#F3F4F6',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 12,
+  },
+  welcomeMascot: {
+    width: 76,
+    height: 76,
+    borderRadius: 38,
+  },
+  welcomeTitle: {
+    fontSize: 22,
+    fontWeight: '800',
+    color: Colors.iconDark,
+    marginBottom: 6,
+    textAlign: 'center',
+  },
+  welcomeSubtitle: {
+    fontSize: 13.5,
+    color: Colors.textSecondary,
+    textAlign: 'center',
+    marginBottom: 20,
+    maxWidth: 320,
+    lineHeight: 19,
+  },
+  promptChipsGrid: {
+    width: '100%',
+    gap: 10,
+  },
+  promptChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F8FAFC',
+    borderRadius: 14,
+    padding: 12,
+    gap: 12,
+    borderWidth: 1,
+    borderColor: '#F1F5F9',
+  },
+  promptChipIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#EFF6FF',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  promptChipContent: {
+    flex: 1,
+  },
+  promptChipTitle: {
+    fontSize: 13.5,
+    fontWeight: '700',
+    color: Colors.iconDark,
+    marginBottom: 2,
+  },
+  promptChipDesc: {
+    fontSize: 12,
+    color: Colors.textSecondary,
+    lineHeight: 16,
   },
   dateBadgeContainer: {
     alignItems: 'center',
@@ -428,11 +660,6 @@ const styles = StyleSheet.create({
     paddingVertical: 2,
     borderWidth: 1,
     borderColor: '#E2E8F0',
-    shadowColor: Colors.black,
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 3,
-    elevation: 2,
   },
   reactionText: {
     fontSize: 13,
@@ -512,8 +739,6 @@ const styles = StyleSheet.create({
     borderRadius: 26,
     paddingHorizontal: 8,
     paddingVertical: 6,
-    borderWidth: 1,
-    borderColor: '#ECEEF0',
   },
   circleBtn: {
     width: 38,
@@ -531,5 +756,49 @@ const styles = StyleSheet.create({
     color: Colors.iconDark,
     paddingHorizontal: 10,
     paddingVertical: Platform.OS === 'ios' ? 8 : 4,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.35)',
+    justifyContent: 'flex-end',
+  },
+  sheetContainer: {
+    backgroundColor: Colors.white,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    padding: 20,
+    paddingBottom: Platform.OS === 'ios' ? 36 : 24,
+  },
+  sheetHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 16,
+  },
+  sheetTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: Colors.iconDark,
+  },
+  sheetOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F1F5F9',
+    gap: 14,
+  },
+  sheetOptionTextWrap: {
+    flex: 1,
+  },
+  sheetOptionTitle: {
+    fontSize: 14.5,
+    fontWeight: '600',
+    color: Colors.iconDark,
+  },
+  sheetOptionDesc: {
+    fontSize: 12,
+    color: Colors.textSecondary,
+    marginTop: 2,
   },
 });

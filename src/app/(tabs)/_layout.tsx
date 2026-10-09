@@ -38,10 +38,11 @@ export default function TabLayout() {
   const router = useRouter();
 
   // Agent mascot & profile state
-  const [agentName, setAgentName] = useState('Muse AI');
+  const [agentName, setAgentName] = useState('Muse');
   const [agentSubtitle, setAgentSubtitle] = useState('Autonomous Agent');
   const [mascotIcon, setMascotIcon] = useState('muse');
   const [mascotColor, setMascotColor] = useState<string>(Colors.primary);
+  const [activeSessionId, setActiveSessionId] = useState('main-chat');
 
   // Modals state
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
@@ -51,13 +52,16 @@ export default function TabLayout() {
   // Load saved profile
   React.useEffect(() => {
     (async () => {
-      const saved = await (await import('@/services/storage')).StorageService.getAgentProfile();
+      const { StorageService } = await import('@/services/storage');
+      const saved = await StorageService.getAgentProfile();
       if (saved) {
         setAgentName(saved.name);
         setAgentSubtitle(saved.subtitle);
         setMascotIcon(saved.icon);
         setMascotColor(saved.color);
       }
+      const activeId = await StorageService.getActiveSessionId();
+      setActiveSessionId(activeId);
     })();
   }, []);
 
@@ -175,22 +179,32 @@ export default function TabLayout() {
       {/* 3. Left Sliding Sidebar Drawer */}
       <SidebarDrawer
         visible={isSidebarOpen}
-        activeChatId="chat-1"
+        activeChatId={activeSessionId}
         agentName={agentName}
         onClose={() => setIsSidebarOpen(false)}
-        onSelectChat={(chatTitle) => {
+        onSelectChat={async (sessionId) => {
+          const { StorageService } = await import('@/services/storage');
+          await StorageService.setActiveSessionId(sessionId);
+          setActiveSessionId(sessionId);
           setIsSidebarOpen(false);
           router.replace('/(tabs)/chat' as any);
         }}
-        onNewChat={() => {
+        onNewChat={async () => {
+          const { StorageService } = await import('@/services/storage');
+          const newSession = await StorageService.createSession();
+          setActiveSessionId(newSession.id);
           setIsSidebarOpen(false);
+          showToast('Started new chat');
           router.replace('/(tabs)/chat' as any);
         }}
         onOpenSettings={() => {
           setIsSidebarOpen(false);
           router.replace('/(tabs)/settings' as any);
         }}
-        onClearSideChats={() => {
+        onClearSideChats={async () => {
+          const { StorageService } = await import('@/services/storage');
+          await StorageService.clearAllSessions();
+          setActiveSessionId('main-chat');
           showToast('Side chats cleared');
         }}
       />
@@ -201,11 +215,21 @@ export default function TabLayout() {
         onClose={() => setIsSettingsMenuOpen(false)}
         onEditAvatar={() => setIsEditAgentOpen(true)}
         onRename={() => setIsEditAgentOpen(true)}
-        onClearChat={() => {
+        onClearChat={async () => {
+          const { StorageService } = await import('@/services/storage');
+          await StorageService.saveSessionMessages(activeSessionId, []);
+          setIsSettingsMenuOpen(false);
           showToast('Conversation cleared');
+          router.replace('/(tabs)/chat' as any);
         }}
-        onDeleteChat={() => {
+        onDeleteChat={async () => {
+          const { StorageService } = await import('@/services/storage');
+          await StorageService.deleteSession(activeSessionId);
+          const active = await StorageService.getActiveSessionId();
+          setActiveSessionId(active);
+          setIsSettingsMenuOpen(false);
           showToast('Chat deleted');
+          router.replace('/(tabs)/chat' as any);
         }}
         onShareChat={() => {
           showToast('Chat export created');

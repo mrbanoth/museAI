@@ -37,6 +37,18 @@ export interface ChatMessage {
 }
 
 /**
+ * Multi-session chat thread data contract
+ */
+export interface ChatSession {
+  id: string;
+  title: string;
+  messages: ChatMessage[];
+  createdAt: string;
+  updatedAt: string;
+  hasUnreadDot?: boolean;
+}
+
+/**
  * Chat topic item listed under "Side chats" in the sliding sidebar drawer.
  */
 export interface SideChatItem {

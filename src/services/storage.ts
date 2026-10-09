@@ -1,14 +1,9 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { ChatMessage, SideChatItem, TaskGoalItem, AgentProfile } from '@/types';
-import {
-  INITIAL_CHAT_MESSAGES,
-  SIDE_CHATS,
-  TASK_GOALS,
-} from '@/constants/dummyData';
+import { ChatMessage, TaskGoalItem, AgentProfile, ChatSession } from '@/types';
 
 const KEYS = {
-  CHAT_MESSAGES: '@muse_ai:chat_messages',
-  SIDE_CHATS: '@muse_ai:side_chats',
+  CHAT_SESSIONS: '@muse_ai:chat_sessions',
+  ACTIVE_SESSION_ID: '@muse_ai:active_session_id',
   TASKS: '@muse_ai:tasks',
   AGENT_PROFILE: '@muse_ai:agent_profile',
   USER_AUTH: '@muse_ai:user_auth',
@@ -44,49 +39,145 @@ const safeStorage = {
   },
 };
 
+const DEFAULT_GREETING: ChatMessage = {
+  id: 'greeting-msg',
+  sender: 'agent',
+  text: "Hello! I'm Muse, your autonomous AI companion. I can research topics, navigate live cloud browsers, execute scheduled goals, and analyze files.\n\nHow can I help you today?",
+  timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+};
+
 export const StorageService = {
-  // Chat Messages
-  async getChatMessages(): Promise<ChatMessage[]> {
+  // Chat Sessions
+  async getAllSessions(): Promise<ChatSession[]> {
     try {
-      const data = await safeStorage.getItem(KEYS.CHAT_MESSAGES);
+      const data = await safeStorage.getItem(KEYS.CHAT_SESSIONS);
       if (data) {
         return JSON.parse(data);
       }
-      return INITIAL_CHAT_MESSAGES;
+      // Create initial clean session if none exists
+      const initialSession: ChatSession = {
+        id: 'main-chat',
+        title: 'Main chat',
+        messages: [DEFAULT_GREETING],
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      };
+      await safeStorage.setItem(KEYS.CHAT_SESSIONS, JSON.stringify([initialSession]));
+      return [initialSession];
     } catch {
-      return INITIAL_CHAT_MESSAGES;
+      return [
+        {
+          id: 'main-chat',
+          title: 'Main chat',
+          messages: [DEFAULT_GREETING],
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        },
+      ];
     }
+  },
+
+  async getActiveSessionId(): Promise<string> {
+    const active = await safeStorage.getItem(KEYS.ACTIVE_SESSION_ID);
+    return active || 'main-chat';
+  },
+
+  async setActiveSessionId(sessionId: string): Promise<void> {
+    await safeStorage.setItem(KEYS.ACTIVE_SESSION_ID, sessionId);
+  },
+
+  async createSession(title?: string): Promise<ChatSession> {
+    const sessions = await this.getAllSessions();
+    const newSession: ChatSession = {
+      id: `session-${Date.now()}`,
+      title: title || 'New chat',
+      messages: [],
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+    const updated = [newSession, ...sessions];
+    await safeStorage.setItem(KEYS.CHAT_SESSIONS, JSON.stringify(updated));
+    await this.setActiveSessionId(newSession.id);
+    return newSession;
+  },
+
+  async deleteSession(sessionId: string): Promise<void> {
+    const sessions = await this.getAllSessions();
+    const filtered = sessions.filter((s) => s.id !== sessionId);
+    if (filtered.length === 0) {
+      filtered.push({
+        id: 'main-chat',
+        title: 'Main chat',
+        messages: [],
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      });
+    }
+    await safeStorage.setItem(KEYS.CHAT_SESSIONS, JSON.stringify(filtered));
+    const activeId = await this.getActiveSessionId();
+    if (activeId === sessionId) {
+      await this.setActiveSessionId(filtered[0].id);
+    }
+  },
+
+  async clearAllSessions(): Promise<void> {
+    const initialSession: ChatSession = {
+      id: 'main-chat',
+      title: 'Main chat',
+      messages: [],
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+    await safeStorage.setItem(KEYS.CHAT_SESSIONS, JSON.stringify([initialSession]));
+    await this.setActiveSessionId('main-chat');
+  },
+
+  async getSessionMessages(sessionId: string): Promise<ChatMessage[]> {
+    const sessions = await this.getAllSessions();
+    const session = sessions.find((s) => s.id === sessionId);
+    return session ? session.messages : [];
+  },
+
+  async saveSessionMessages(sessionId: string, messages: ChatMessage[], newTitle?: string): Promise<void> {
+    const sessions = await this.getAllSessions();
+    const exists = sessions.some((s) => s.id === sessionId);
+    let updated: ChatSession[];
+    if (exists) {
+      updated = sessions.map((s) => {
+        if (s.id === sessionId) {
+          return {
+            ...s,
+            title: newTitle || s.title,
+            messages,
+            updatedAt: new Date().toISOString(),
+          };
+        }
+        return s;
+      });
+    } else {
+      updated = [
+        {
+          id: sessionId,
+          title: newTitle || 'New chat',
+          messages,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        },
+        ...sessions,
+      ];
+    }
+    await safeStorage.setItem(KEYS.CHAT_SESSIONS, JSON.stringify(updated));
+  },
+
+  // Legacy helper
+  async getChatMessages(): Promise<ChatMessage[]> {
+    const activeId = await this.getActiveSessionId();
+    return this.getSessionMessages(activeId);
   },
 
   async saveChatMessages(messages: ChatMessage[]): Promise<void> {
-    try {
-      await safeStorage.setItem(KEYS.CHAT_MESSAGES, JSON.stringify(messages));
-    } catch {}
-  },
-
-  async clearChatMessages(): Promise<void> {
-    try {
-      await safeStorage.removeItem(KEYS.CHAT_MESSAGES);
-    } catch {}
-  },
-
-  // Side Chats
-  async getSideChats(): Promise<SideChatItem[]> {
-    try {
-      const data = await safeStorage.getItem(KEYS.SIDE_CHATS);
-      if (data) {
-        return JSON.parse(data);
-      }
-      return SIDE_CHATS;
-    } catch {
-      return SIDE_CHATS;
-    }
-  },
-
-  async saveSideChats(sideChats: SideChatItem[]): Promise<void> {
-    try {
-      await safeStorage.setItem(KEYS.SIDE_CHATS, JSON.stringify(sideChats));
-    } catch {}
+    const activeId = await this.getActiveSessionId();
+    await this.saveSessionMessages(activeId, messages);
   },
 
   // Tasks & Goals
@@ -96,9 +187,9 @@ export const StorageService = {
       if (data) {
         return JSON.parse(data);
       }
-      return TASK_GOALS;
+      return [];
     } catch {
-      return TASK_GOALS;
+      return [];
     }
   },
 
