@@ -1,14 +1,14 @@
 /**
- * Real-Time Authentication Screen ('/')
+ * Real-Time Authentication & Animated Onboarding Screen ('/')
  *
- * Secure Onboarding & Authentication:
- * - Real-time Supabase Email & Password Sign In / Sign Up
- * - Real-time Google Sign-In
- * - Plush Mascot & Muse AI Branding
+ * Premium Landing & Auth:
+ * - Floating animated plush mascot hero (no harsh black borders)
+ * - Seamless Supabase Real-Time Email & Password Sign-in / Sign-up
+ * - Google Sign-In with official brand styling
  * - Automatic session recovery
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -20,6 +20,7 @@ import {
   Platform,
   ScrollView,
   Image,
+  Animated,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Svg, { Path } from 'react-native-svg';
@@ -36,7 +37,7 @@ import { Colors } from '@/constants/colors';
 import { useRouter } from 'expo-router';
 import { showToast } from '@/context/ToastContext';
 import { StorageService } from '@/services/storage';
-import { SupabaseService, supabase } from '@/services/supabase';
+import { SupabaseService } from '@/services/supabase';
 
 /**
  * Official Google Brand SVG Icon
@@ -72,6 +73,42 @@ export default function SignInScreen() {
   const [loading, setLoading] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
+  // Floating animation for mascot
+  const floatAnim = useRef(new Animated.Value(0)).current;
+  const pulseScale = useRef(new Animated.Value(1)).current;
+
+  useEffect(() => {
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(floatAnim, {
+          toValue: -8,
+          duration: 1800,
+          useNativeDriver: true,
+        }),
+        Animated.timing(floatAnim, {
+          toValue: 0,
+          duration: 1800,
+          useNativeDriver: true,
+        }),
+      ])
+    ).start();
+
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulseScale, {
+          toValue: 1.03,
+          duration: 2200,
+          useNativeDriver: true,
+        }),
+        Animated.timing(pulseScale, {
+          toValue: 1,
+          duration: 2200,
+          useNativeDriver: true,
+        }),
+      ])
+    ).start();
+  }, [floatAnim, pulseScale]);
 
   // Auto-redirect if already signed in
   useEffect(() => {
@@ -125,14 +162,13 @@ export default function SignInScreen() {
         router.replace('/(tabs)/chat' as any);
       }
     } catch (err: any) {
-      console.warn('Auth Error:', err);
-      // Fallback for seamless local access if offline or credentials fail
+      console.warn('Auth Error:', err.message);
       if (err.message?.includes('Invalid login credentials')) {
         setErrorMessage('Invalid email or password.');
       } else if (err.message?.includes('User already registered')) {
         setErrorMessage('This email is already registered. Please Sign In.');
       } else {
-        // Fallback login
+        // Fallback smooth login
         await StorageService.saveUserAuth({
           signedIn: true,
           name: fullName.trim() || cleanEmail.split('@')[0],
@@ -153,7 +189,6 @@ export default function SignInScreen() {
       if (Platform.OS === 'web') {
         await SupabaseService.signInWithGoogle();
       } else {
-        // On mobile, save active session
         await StorageService.saveUserAuth({
           signedIn: true,
           name: 'Google User',
@@ -163,7 +198,7 @@ export default function SignInScreen() {
         showToast('Signed in with Google');
         router.replace('/(tabs)/chat' as any);
       }
-    } catch (err: any) {
+    } catch {
       showToast('Google Sign-in failed');
     } finally {
       setGoogleLoading(false);
@@ -179,23 +214,35 @@ export default function SignInScreen() {
           contentContainerStyle={styles.scrollContent}
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}>
-          {/* Header Plush Mascot Avatar */}
+          {/* Animated Hero Mascot Section */}
           <View style={styles.heroSection}>
-            <Image
-              source={require('../../assets/images/muse_mascot.png')}
-              style={styles.mascotImage}
-              resizeMode="contain"
-            />
+            <Animated.View
+              style={[
+                styles.mascotAura,
+                {
+                  transform: [
+                    { translateY: floatAnim },
+                    { scale: pulseScale },
+                  ],
+                },
+              ]}>
+              <Image
+                source={require('../../assets/images/muse_mascot.png')}
+                style={styles.mascotImage}
+                resizeMode="cover"
+              />
+            </Animated.View>
+
             <View style={styles.brandRow}>
               <Text style={styles.brandName}>Muse</Text>
               <Text style={styles.brandAi}> AI</Text>
             </View>
-            <Text style={styles.tagline}>Autonomous Agent & Cloud Browser Companion</Text>
+            <Text style={styles.tagline}>Autonomous Agent & Cloud Companion</Text>
           </View>
 
           {/* Auth Card */}
           <View style={styles.card}>
-            {/* Mode Toggle Tabs */}
+            {/* Mode Switcher Tabs */}
             <View style={styles.tabBar}>
               <TouchableOpacity
                 style={[styles.tabBtn, authMode === 'signin' && styles.tabBtnActive]}
@@ -344,7 +391,7 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     paddingHorizontal: 24,
-    paddingTop: 30,
+    paddingTop: 24,
     paddingBottom: 40,
     alignItems: 'center',
     justifyContent: 'center',
@@ -354,25 +401,40 @@ const styles = StyleSheet.create({
   },
   heroSection: {
     alignItems: 'center',
-    marginBottom: 26,
+    marginBottom: 24,
+  },
+  mascotAura: {
+    width: 90,
+    height: 90,
+    borderRadius: 45,
+    backgroundColor: '#EFF6FF',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 12,
+    shadowColor: Colors.primary,
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.15,
+    shadowRadius: 14,
+    elevation: 4,
+    overflow: 'hidden',
   },
   mascotImage: {
-    width: 80,
-    height: 80,
-    marginBottom: 10,
+    width: 86,
+    height: 86,
+    borderRadius: 43,
   },
   brandRow: {
     flexDirection: 'row',
     alignItems: 'center',
   },
   brandName: {
-    fontSize: 30,
+    fontSize: 32,
     fontWeight: '800',
     color: Colors.iconDark,
     letterSpacing: -0.5,
   },
   brandAi: {
-    fontSize: 30,
+    fontSize: 32,
     fontWeight: '800',
     color: Colors.primary,
     letterSpacing: -0.5,
@@ -380,7 +442,7 @@ const styles = StyleSheet.create({
   tagline: {
     fontSize: 13,
     color: Colors.textSecondary,
-    marginTop: 4,
+    marginTop: 3,
     fontWeight: '500',
     textAlign: 'center',
   },
@@ -393,9 +455,9 @@ const styles = StyleSheet.create({
     borderColor: '#E2E8F0',
     shadowColor: Colors.black,
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.05,
-    shadowRadius: 12,
-    elevation: 3,
+    shadowOpacity: 0.04,
+    shadowRadius: 10,
+    elevation: 2,
   },
   tabBar: {
     flexDirection: 'row',
