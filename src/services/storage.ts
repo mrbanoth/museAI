@@ -116,7 +116,7 @@ export const StorageService = {
   },
 
   // User Auth State
-  async getUserAuth(): Promise<{ signedIn: boolean; email?: string; name?: string; avatar?: string } | null> {
+  async getUserAuth(): Promise<{ signedIn: boolean; email?: string; name?: string; avatar?: string; userId?: string } | null> {
     try {
       const data = await AsyncStorage.getItem(KEYS.USER_AUTH);
       return data ? JSON.parse(data) : null;
@@ -125,7 +125,7 @@ export const StorageService = {
     }
   },
 
-  async saveUserAuth(user: { signedIn: boolean; email?: string; name?: string; avatar?: string }): Promise<void> {
+  async saveUserAuth(user: { signedIn: boolean; email?: string; name?: string; avatar?: string; userId?: string }): Promise<void> {
     try {
       await AsyncStorage.setItem(KEYS.USER_AUTH, JSON.stringify(user));
     } catch (e) {

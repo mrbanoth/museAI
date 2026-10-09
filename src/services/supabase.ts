@@ -1,21 +1,74 @@
 import { createClient } from '@supabase/supabase-js';
+import { Platform } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { ChatMessage, TaskGoalItem, FeedItem, AgentProfile } from '@/types';
 
-const SUPABASE_URL = process.env.SUPABASE_URL || 'https://hmkdafydnmouvmdvgwin.supabase.co';
-const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY || '';
+export const SUPABASE_URL = process.env.EXPO_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL || 'https://hmkdafydnmouvmdvgwin.supabase.co';
+export const SUPABASE_ANON_KEY = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY || 'sb_publishable_3k8MdQMUoI-zhCXze3dBIA_LD_hBBjT';
 
-export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY || 'placeholder-anon-key');
+export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+  auth: {
+    storage: AsyncStorage as any,
+    autoRefreshToken: true,
+    persistSession: true,
+    detectSessionInUrl: Platform.OS === 'web',
+  },
+});
 
 export const isSupabaseConfigured = () => {
-  return !!SUPABASE_ANON_KEY && SUPABASE_ANON_KEY !== 'placeholder-anon-key';
+  return !!SUPABASE_ANON_KEY && SUPABASE_ANON_KEY.length > 10;
 };
 
 export const SupabaseService = {
+  // Authentication
+  async signUp(email: string, pass: string, fullName?: string) {
+    const { data, error } = await supabase.auth.signUp({
+      email,
+      password: pass,
+      options: {
+        data: {
+          full_name: fullName || email.split('@')[0],
+        },
+      },
+    });
+    if (error) throw error;
+    return data;
+  },
+
+  async signIn(email: string, pass: string) {
+    const { data, error } = await supabase.auth.signInWithPassword({
+      email,
+      password: pass,
+    });
+    if (error) throw error;
+    return data;
+  },
+
+  async signInWithGoogle() {
+    const { data, error } = await supabase.auth.signInWithOAuth({
+      provider: 'google',
+      options: {
+        redirectTo: Platform.OS === 'web' ? window.location.origin : undefined,
+      },
+    });
+    if (error) throw error;
+    return data;
+  },
+
+  async signOut() {
+    const { error } = await supabase.auth.signOut();
+    if (error) console.warn('Supabase signOut error:', error.message);
+  },
+
+  async getCurrentSession() {
+    const { data } = await supabase.auth.getSession();
+    return data.session;
+  },
+
   // Messages sync
   async syncMessages(messages: ChatMessage[]) {
     if (!isSupabaseConfigured()) return;
     try {
-      // Upsert messages
       const rows = messages.map((m) => ({
         id: m.id,
         sender: m.sender,
