@@ -18,6 +18,7 @@ import {
   TouchableOpacity,
   KeyboardAvoidingView,
   Platform,
+  Share,
   Keyboard,
   TouchableWithoutFeedback,
   ActivityIndicator,
@@ -30,7 +31,6 @@ import { useFocusEffect } from 'expo-router';
 import { HugeiconsIcon } from '@hugeicons/react-native';
 import {
   Add01Icon,
-  Mic01Icon,
   SentIcon,
   Globe02Icon,
   PlayIcon,
@@ -44,9 +44,10 @@ import { Colors } from '@/constants/colors';
 import { ChatMessage } from '@/types';
 import { showToast } from '@/context/ToastContext';
 import { ApiService, newRequestId, subscribeEvents } from '@/services/api';
-import { StorageService } from '@/services/storage';
+import { StorageService, onSessionsChanged } from '@/services/storage';
 import {
   LiveBrowserModal,
+  MarkdownText,
   FinanceCard,
   BrowserCard,
   CheckoutCard,
@@ -114,6 +115,15 @@ export default function ChatScreen() {
       loadActiveSessionMessages();
     }, [loadActiveSessionMessages])
   );
+
+  // Refresh when chats change elsewhere (sidebar, header menu); skip while a reply is in flight
+  const isProcessingRef = useRef(false);
+  isProcessingRef.current = isProcessing;
+  useEffect(() => {
+    return onSessionsChanged(() => {
+      if (!isProcessingRef.current) loadActiveSessionMessages();
+    });
+  }, [loadActiveSessionMessages]);
 
   useEffect(() => {
     scrollViewRef.current?.scrollToEnd({ animated: true });
@@ -332,18 +342,20 @@ export default function ChatScreen() {
                       {msg.text ? (
                         <TouchableOpacity
                           activeOpacity={0.85}
-                          onPress={() => showToast(msg.text)}
+                          onLongPress={() => {
+                            // Long-press: share / copy the message text
+                            Share.share({ message: msg.text }).catch(() => {});
+                          }}
+                          delayLongPress={350}
                           style={[
                             styles.bubble,
                             isUser ? styles.userBubble : styles.agentBubble,
                           ]}>
-                          <Text
-                            style={[
-                              styles.bubbleText,
-                              isUser ? styles.userBubbleText : styles.agentBubbleText,
-                            ]}>
-                            {msg.text}
-                          </Text>
+                          {isUser ? (
+                            <Text style={[styles.bubbleText, styles.userBubbleText]}>{msg.text}</Text>
+                          ) : (
+                            <MarkdownText text={msg.text} style={[styles.bubbleText, styles.agentBubbleText]} />
+                          )}
                         </TouchableOpacity>
                       ) : null}
 
@@ -513,22 +525,15 @@ export default function ChatScreen() {
               onSubmitEditing={() => handleSend()}
             />
 
-            {/* Right Action: Send Button */}
-            {inputText.trim().length > 0 ? (
-              <TouchableOpacity
-                style={[styles.circleBtn, styles.sendBtn]}
-                onPress={() => handleSend()}
-                activeOpacity={0.8}>
-                <HugeiconsIcon icon={SentIcon} size={18} color={Colors.white} strokeWidth={2.4} />
-              </TouchableOpacity>
-            ) : (
-              <TouchableOpacity
-                style={styles.circleBtn}
-                onPress={() => showToast('Voice input is not available yet')}
-                activeOpacity={0.7}>
-                <HugeiconsIcon icon={Mic01Icon} size={20} color={Colors.iconDark} strokeWidth={2} />
-              </TouchableOpacity>
-            )}
+            {/* Right Action: Send Button (dimmed until there is text) */}
+            <TouchableOpacity
+              style={[styles.circleBtn, styles.sendBtn, (!inputText.trim() || isProcessing) && styles.sendBtnDisabled]}
+              onPress={() => handleSend()}
+              disabled={!inputText.trim() || isProcessing}
+              activeOpacity={0.8}
+              accessibilityLabel="Send message">
+              <HugeiconsIcon icon={SentIcon} size={18} color={Colors.white} strokeWidth={2.4} />
+            </TouchableOpacity>
           </View>
         </View>
       </View>
@@ -602,6 +607,9 @@ export default function ChatScreen() {
 }
 
 const styles = StyleSheet.create({
+  sendBtnDisabled: {
+    opacity: 0.35,
+  },
   container: {
     flex: 1,
     backgroundColor: Colors.white,

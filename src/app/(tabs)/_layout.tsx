@@ -14,7 +14,7 @@
  */
 
 import React, { useState } from 'react';
-import { View, StyleSheet, Platform } from 'react-native';
+import { View, StyleSheet, Platform, Share } from 'react-native';
 import { Tabs, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { HugeiconsIcon } from '@hugeicons/react-native';
@@ -223,7 +223,7 @@ export default function TabLayout() {
         onRename={() => setIsEditAgentOpen(true)}
         onClearChat={async () => {
           const { StorageService } = await import('@/services/storage');
-          await StorageService.saveSessionMessages(activeSessionId, []);
+          await StorageService.clearSessionMessages(activeSessionId);
           setIsSettingsMenuOpen(false);
           showToast('Conversation cleared');
           router.replace('/(tabs)/chat' as any);
@@ -237,8 +237,29 @@ export default function TabLayout() {
           showToast('Chat deleted');
           router.replace('/(tabs)/chat' as any);
         }}
-        onShareChat={() => {
-          showToast('Chat export created');
+        onShareChat={async () => {
+          setIsSettingsMenuOpen(false);
+          const { StorageService } = await import('@/services/storage');
+          const sessions = await StorageService.getAllSessions();
+          const session = sessions.find((x) => x.id === activeSessionId);
+          if (!session || session.messages.length === 0) {
+            showToast('Nothing to export yet');
+            return;
+          }
+          const transcript = session.messages
+            .map((m) => `${m.sender === 'user' ? 'You' : agentName} (${m.timestamp}):\n${m.text}`)
+            .join('\n\n');
+          const text = `${session.title}\n\n${transcript}`;
+          try {
+            if (Platform.OS === 'web' && typeof navigator !== 'undefined' && !(navigator as any).share) {
+              await navigator.clipboard.writeText(text);
+              showToast('Chat copied to clipboard');
+            } else {
+              await Share.share({ title: session.title, message: text });
+            }
+          } catch {
+            showToast('Could not export chat');
+          }
         }}
       />
 

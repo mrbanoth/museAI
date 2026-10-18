@@ -26,8 +26,6 @@ import { HugeiconsIcon } from '@hugeicons/react-native';
 import {
   Grid02Icon,
   Tag01Icon,
-  Notification01Icon,
-  PaintBrush01Icon,
   ArrowRight01Icon,
   HelpCircleIcon,
   Logout01Icon,
@@ -38,12 +36,11 @@ import {
   CheckmarkCircle01Icon,
 } from '@hugeicons/core-free-icons';
 import { Colors } from '@/constants/colors';
-import { SETTINGS_PLAN_DATA } from '@/constants/dummyData';
 import { ConnectorItem } from '@/types';
 import { showToast } from '@/context/ToastContext';
 import { StorageService } from '@/services/storage';
 import { SupabaseService } from '@/services/supabase';
-import { ApiService, subscribeEvents } from '@/services/api';
+import { ApiService, API_BASE_URL, subscribeEvents } from '@/services/api';
 import * as WebBrowser from 'expo-web-browser';
 import * as Linking from 'expo-linking';
 import { MascotAvatar, BrandLogoIcon } from '@/components/common';
@@ -55,10 +52,23 @@ export default function SettingsScreen() {
   const [isConnectorsOpen, setIsConnectorsOpen] = useState(false);
   const [connectorSearch, setConnectorSearch] = useState('');
   const [uploadingImage, setUploadingImage] = useState(false);
+  const [me, setMe] = useState<Awaited<ReturnType<typeof ApiService.getMe>> | null>(null);
+  const [meError, setMeError] = useState<string | null>(null);
+
+  const openLink = (url: string) => {
+    if (Platform.OS === 'web') window.open(url, '_blank');
+    else WebBrowser.openBrowserAsync(url).catch(() => showToast('Could not open link'));
+  };
 
   const loadData = useCallback(async () => {
     const auth = await StorageService.getUserAuth();
     if (auth) setUserAuth(auth);
+    ApiService.getMe()
+      .then((data) => {
+        setMe(data);
+        setMeError(null);
+      })
+      .catch((e) => setMeError(e.message));
     const connList = await StorageService.getConnectors();
     // Gmail & Calendar are real OAuth connectors managed by the agent server
     let live: Awaited<ReturnType<typeof ApiService.listConnectors>> = [];
@@ -223,8 +233,8 @@ export default function SettingsScreen() {
           </TouchableOpacity>
 
           <View style={styles.accountTextCol}>
-            <Text style={styles.accountName}>{userAuth?.name || 'Rahul Sana'}</Text>
-            <Text style={styles.accountEmail}>{userAuth?.email || 'rahul.s@muse.ai'}</Text>
+            <Text style={styles.accountName}>{userAuth?.name || me?.email?.split('@')[0] || 'Muse user'}</Text>
+            <Text style={styles.accountEmail}>{userAuth?.email || me?.email || ''}</Text>
             {userAuth?.avatar ? (
               <TouchableOpacity onPress={handleRemoveAvatar} style={styles.resetAvatarBtn}>
                 <Text style={styles.resetAvatarText}>Use Mascot Avatar</Text>
@@ -232,31 +242,41 @@ export default function SettingsScreen() {
             ) : null}
           </View>
 
-          <View style={styles.proBadge}>
-            <Text style={styles.proBadgeText}>PRO</Text>
-          </View>
         </View>
 
-        {/* 1. Free Plan Card */}
+        {/* 1. Today's usage + live service status (from the server) */}
         <View style={styles.planCard}>
           <View style={styles.planHeaderRow}>
-            <Text style={styles.planTitle}>{SETTINGS_PLAN_DATA.planName}</Text>
-            <Text style={styles.planUsageText}>{SETTINGS_PLAN_DATA.percentUsed}% used</Text>
+            <Text style={styles.planTitle}>Today's agent runs</Text>
+            <Text style={styles.planUsageText}>
+              {me ? `${me.usage.used} / ${me.usage.limit}` : meError ? 'Offline' : '…'}
+            </Text>
           </View>
-          <Text style={styles.planResetText}>{SETTINGS_PLAN_DATA.resetText}</Text>
+          <Text style={styles.planResetText}>
+            {meError ? `Server unreachable: ${meError}` : 'Chats, ideas and manual task runs. Resets daily.'}
+          </Text>
           <View style={styles.progressBarTrack}>
             <View
               style={[
                 styles.progressBarFill,
-                { width: `${SETTINGS_PLAN_DATA.percentUsed}%` },
+                { width: `${me ? Math.min(100, Math.round((me.usage.used / Math.max(1, me.usage.limit)) * 100)) : 0}%` },
               ]}
             />
           </View>
-          <TouchableOpacity
-            style={styles.upgradeBtn}
-            onPress={() => showToast('Plan upgrades are coming soon')}
-            activeOpacity={0.8}>
-            <Text style={styles.upgradeBtnText}>Upgrade Plan</Text>
+          <View style={styles.statusRow}>
+            {[
+              { label: 'AI brain', ok: me?.services.ai },
+              { label: 'Live browser', ok: me?.services.browser },
+              { label: 'Google', ok: me?.services.google },
+            ].map((svc) => (
+              <View key={svc.label} style={styles.statusPill}>
+                <View style={[styles.statusDot, { backgroundColor: svc.ok ? Colors.success : svc.ok === false ? Colors.error : Colors.textMuted }]} />
+                <Text style={styles.statusText}>{svc.label}</Text>
+              </View>
+            ))}
+          </View>
+          <TouchableOpacity style={styles.upgradeBtn} onPress={loadData} activeOpacity={0.8}>
+            <Text style={styles.upgradeBtnText}>Refresh status</Text>
           </TouchableOpacity>
         </View>
 
@@ -278,64 +298,34 @@ export default function SettingsScreen() {
             <HugeiconsIcon icon={ArrowRight01Icon} size={18} color={Colors.iconMuted} />
           </TouchableOpacity>
 
-          <TouchableOpacity
-            style={styles.menuItem}
-            onPress={() => showToast('Pricing is coming soon')}
-            activeOpacity={0.7}>
-            <View style={styles.menuIconWrap}>
-              <HugeiconsIcon icon={Tag01Icon} size={20} color="#10B981" strokeWidth={2} />
-            </View>
-            <View style={styles.menuTextWrap}>
-              <Text style={styles.menuTitle}>Billing & Invoices</Text>
-              <Text style={styles.menuSubtitle}>Manage payment methods and history</Text>
-            </View>
-            <HugeiconsIcon icon={ArrowRight01Icon} size={18} color={Colors.iconMuted} />
-          </TouchableOpacity>
-        </View>
-
-        {/* 3. Menu Section: App Preferences */}
-        <View style={styles.menuGroup}>
-          <TouchableOpacity
-            style={styles.menuItem}
-            onPress={() => showToast('Notification settings are coming soon')}
-            activeOpacity={0.7}>
-            <View style={styles.menuIconWrap}>
-              <HugeiconsIcon icon={Notification01Icon} size={20} color="#F59E0B" strokeWidth={2} />
-            </View>
-            <View style={styles.menuTextWrap}>
-              <Text style={styles.menuTitle}>Notifications</Text>
-              <Text style={styles.menuSubtitle}>Autonomous goals & daily summaries</Text>
-            </View>
-            <HugeiconsIcon icon={ArrowRight01Icon} size={18} color={Colors.iconMuted} />
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={styles.menuItem}
-            onPress={() => showToast('Appearance settings are coming soon')}
-            activeOpacity={0.7}>
-            <View style={styles.menuIconWrap}>
-              <HugeiconsIcon icon={PaintBrush01Icon} size={20} color="#8B5CF6" strokeWidth={2} />
-            </View>
-            <View style={styles.menuTextWrap}>
-              <Text style={styles.menuTitle}>Appearance</Text>
-              <Text style={styles.menuSubtitle}>Theme, accent aura and display</Text>
-            </View>
-            <HugeiconsIcon icon={ArrowRight01Icon} size={18} color={Colors.iconMuted} />
-          </TouchableOpacity>
         </View>
 
         {/* 4. Support & Sign Out */}
         <View style={styles.menuGroup}>
           <TouchableOpacity
             style={styles.menuItem}
-            onPress={() => showToast('Help Center is coming soon')}
+            onPress={() => openLink('https://github.com/mrbanoth/museAI/blob/main/SETUP.md')}
             activeOpacity={0.7}>
             <View style={styles.menuIconWrap}>
-              <HugeiconsIcon icon={HelpCircleIcon} size={20} color="#64748B" strokeWidth={2} />
+              <HugeiconsIcon icon={HelpCircleIcon} size={20} color={Colors.textSecondary} strokeWidth={2} />
             </View>
             <View style={styles.menuTextWrap}>
-              <Text style={styles.menuTitle}>Help & Feedback</Text>
-              <Text style={styles.menuSubtitle}>Docs, guides, and priority support</Text>
+              <Text style={styles.menuTitle}>Help & Setup guide</Text>
+              <Text style={styles.menuSubtitle}>How to connect accounts and fix problems</Text>
+            </View>
+            <HugeiconsIcon icon={ArrowRight01Icon} size={18} color={Colors.iconMuted} />
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.menuItem}
+            onPress={() => openLink(API_BASE_URL.replace(/\/api$/, '/privacy'))}
+            activeOpacity={0.7}>
+            <View style={styles.menuIconWrap}>
+              <HugeiconsIcon icon={Tag01Icon} size={20} color={Colors.success} strokeWidth={2} />
+            </View>
+            <View style={styles.menuTextWrap}>
+              <Text style={styles.menuTitle}>Privacy policy</Text>
+              <Text style={styles.menuSubtitle}>What Muse does with your data</Text>
             </View>
             <HugeiconsIcon icon={ArrowRight01Icon} size={18} color={Colors.iconMuted} />
           </TouchableOpacity>
@@ -454,6 +444,31 @@ export default function SettingsScreen() {
 }
 
 const styles = StyleSheet.create({
+  statusRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginTop: 14,
+  },
+  statusPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 999,
+    backgroundColor: Colors.surfaceMuted,
+  },
+  statusDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+  },
+  statusText: {
+    fontSize: 12,
+    color: Colors.textSecondary,
+    fontWeight: '600',
+  },
   container: {
     flex: 1,
     backgroundColor: Colors.white,

@@ -14,3 +14,5 @@ export { CheckoutCard, type CheckoutCardProps } from './CheckoutCard';
 export { DocumentCard, type DocumentCardProps } from './DocumentCard';
 export { BrandLogoIcon, type BrandLogoIconProps } from './BrandLogoIcon';
 
+export { EmbeddedBrowser } from './EmbeddedBrowser';
+export { MarkdownText } from './MarkdownText';

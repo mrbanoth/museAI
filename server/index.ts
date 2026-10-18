@@ -15,7 +15,7 @@ import connectorsRouter, { googleCallbackRouter } from './routes/connectors';
 import { bbClient, isBrowserbaseConfigured } from './services/browserbase';
 import { isLlmConfigured } from './services/agentEngine';
 import { startScheduler } from './services/scheduler';
-import { requireAuth, isAuthEnabled, limitAgentRuns } from './services/auth';
+import { requireAuth, isAuthEnabled, limitAgentRuns, getUsage } from './services/auth';
 import { currentUser } from './services/userContext';
 import { isGoogleConfigured } from './services/google';
 
@@ -56,6 +56,21 @@ app.use('/api/connectors/google', googleCallbackRouter);
 
 // Everything below requires a verified user (see services/auth.ts)
 app.use('/api', requireAuth);
+
+// Signed-in user's profile: usage today and which capabilities are live on this server
+app.get('/api/me', (_req, res) => {
+  const user = currentUser();
+  res.json({
+    success: true,
+    email: user,
+    usage: getUsage(user),
+    services: {
+      ai: isLlmConfigured(),
+      browser: isBrowserbaseConfigured(),
+      google: isGoogleConfigured(),
+    },
+  });
+});
 
 // Agent runs cost money: cap them per user per day (DAILY_AGENT_LIMIT, default 100)
 const agentLimit = limitAgentRuns(currentUser);

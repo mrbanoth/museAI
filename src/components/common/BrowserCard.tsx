@@ -26,6 +26,7 @@ import {
   Search01Icon,
 } from '@hugeicons/core-free-icons';
 import { Colors } from '@/constants/colors';
+import { EmbeddedBrowser } from './EmbeddedBrowser';
 
 export interface BrowserCardProps {
   title?: string;
@@ -277,10 +278,13 @@ export const BrowserCard: React.FC<BrowserCardProps> = ({
 
           {/* Live Web Viewport with Simulated Human Interaction */}
           <View style={styles.viewport}>
-            {Platform.OS === 'web' ? (
+            {liveViewUrl ? (
+              // Real-time Browserbase stream (WebView on phones, iframe on web)
+              <EmbeddedBrowser url={liveViewUrl} />
+            ) : Platform.OS === 'web' ? (
               // @ts-ignore
               <iframe
-                src={liveViewUrl || targetUrl}
+                src={targetUrl}
                 style={styles.iframe}
                 title="Browser View"
                 sandbox="allow-scripts allow-same-origin allow-forms allow-popups"

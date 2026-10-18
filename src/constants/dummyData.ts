@@ -157,38 +157,42 @@ export const SIDE_CHATS: SideChatItem[] = [
 export const IDEA_ITEMS: IdeaItem[] = [
   {
     id: 'idea-1',
-    icon: '🛂',
-    title: 'I can follow up on your airline refund',
-    description: 'I found an email from the airline confirming your canceled flight on October 14, but no refund has been posted. Want me to draft a follow-up and track it until it lands?',
-    prompt: 'Draft a follow-up email for my airline refund and track it until it lands.',
+    icon: 'flight',
+    title: 'Find the cheapest flight',
+    description: 'Muse opens a flight search site in the live browser and compares fares for your route.',
+    prompt:
+      'Open https://www.google.com/travel/flights and find the cheapest one-way flight from Hyderabad to Bangalore next Friday. Tell me the airline, time and price.',
   },
   {
     id: 'idea-2',
-    icon: '🛍️',
-    title: 'I can find a bigger stroller for Luca',
-    description: "Based on Luca's age he'll outgrow his stroller in the next month. I'm watching Marketplace for a bigger option under $300.",
-    prompt: "Look for travel stroller options for Luca on Marketplace under $300.",
+    icon: 'shopping',
+    title: 'Compare a product price',
+    description: 'Searches the web for current prices of a product and lists the best deals with links.',
+    prompt:
+      'Find the current best price in India for Sony WH-1000XM5 headphones. Compare at least 3 stores and give me the links.',
   },
   {
     id: 'idea-3',
-    icon: '👟',
-    title: 'Build a daily training plan for your half marathon',
-    description: 'Your VO2 max is up 4% and your average pace dropped to 9.12. I\'m building a 10-week plan synced to your calendar that adjusts based on your health connector data.',
-    prompt: 'Build a personalized 10-week half marathon training plan synced with my calendar.',
+    icon: 'news',
+    title: 'Tech news digest',
+    description: 'Reads Hacker News and summarizes the top stories so you are caught up in a minute.',
+    prompt: 'Open https://news.ycombinator.com and summarize the top 5 stories in one line each, with links.',
   },
   {
     id: 'idea-4',
-    icon: '🍽️',
-    title: 'I can book your anniversary dinner',
-    description: "You saved a restaurant on Instagram last month and there's an opening Saturday at 8 PM. Want me to reserve a table for two?",
-    prompt: 'Reserve a table for two at our saved restaurant for this Saturday at 8 PM.',
+    icon: 'calendar',
+    title: 'Plan my week',
+    description: 'Looks at your Google Calendar and suggests free slots for focus time and workouts.',
+    prompt:
+      'Check my Google Calendar for the next 7 days, list my events, and suggest the best free slots for 3 workouts and 2 focus blocks.',
   },
   {
     id: 'idea-5',
-    icon: '🛏️',
-    title: 'I can help dial in your sleep based on the data',
-    description: 'Cross-referencing your sleep logs with your calendar reveals peak REM cycles when you wrap up screen time by 10 PM. Want a nightly bedtime optimization schedule?',
-    prompt: 'Analyze my sleep tracker logs and create a nightly bedtime routine schedule.',
+    icon: 'inbox',
+    title: 'Evening inbox wrap-up',
+    description: 'Summarizes today\'s unread Gmail and tells you which emails need a reply.',
+    prompt:
+      'Summarize my unread Gmail from today. Group them as "needs reply", "FYI" and "promotions", and keep it short.',
   },
 ];
 

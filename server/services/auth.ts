@@ -88,6 +88,14 @@ export function agentRunLimit(user: string): { ok: boolean; limit: number } {
   return { ok: true, limit };
 }
 
+/** Today's agent runs for a user (read-only) */
+export function getUsage(user: string) {
+  const limit = Number(process.env.DAILY_AGENT_LIMIT || 100);
+  const day = new Date().toISOString().slice(0, 10);
+  const entry = usage.get(user);
+  return { used: entry && entry.day === day ? entry.count : 0, limit };
+}
+
 /** Express middleware for routes that start an agent run */
 export function limitAgentRuns(user: () => string) {
   return (_req: Request, res: Response, next: NextFunction) => {

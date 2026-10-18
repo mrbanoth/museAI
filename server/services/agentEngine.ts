@@ -434,7 +434,7 @@ async function runGemini(
  * tools and reports their actual output, but cannot reason over it.
  */
 async function runBasic(userMessage: string, actions: AgentAction[], requestId?: string): Promise<string> {
-  const notice = '_AI reasoning is offline (GEMINI_API_KEY not set) — showing raw results._\n\n';
+  const notice = '*AI reasoning is offline (GEMINI_API_KEY not set) — showing raw results.*\n\n';
   const urlMatch = userMessage.match(/https?:\/\/[^\s)]+/i);
   const lower = userMessage.toLowerCase();
 

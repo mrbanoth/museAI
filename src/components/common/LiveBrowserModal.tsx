@@ -15,9 +15,9 @@ import {
   Globe02Icon,
   MaximizeIcon,
   Share01Icon,
-  PlayIcon,
 } from '@hugeicons/core-free-icons';
 import { Colors } from '@/constants/colors';
+import { EmbeddedBrowser } from './EmbeddedBrowser';
 
 interface LiveBrowserModalProps {
   visible: boolean;
@@ -78,29 +78,7 @@ export const LiveBrowserModal: React.FC<LiveBrowserModalProps> = ({
 
           {/* Body: Embedded Cloud Browser */}
           <View style={styles.browserContainer}>
-            {Platform.OS === 'web' ? (
-              // @ts-ignore - Web iframe for Browserbase Live View & Replay
-              <iframe
-                src={url}
-                style={styles.iframeStyle}
-                title="Browserbase Live Session"
-                allow="camera; microphone; clipboard-read; clipboard-write;"
-              />
-            ) : (
-              <View style={styles.mobileFallback}>
-                <HugeiconsIcon icon={PlayIcon} size={48} color={Colors.primary} />
-                <Text style={styles.fallbackTitle}>Cloud Browser Session Active</Text>
-                <Text style={styles.fallbackDesc}>
-                  Viewing session: {url}
-                </Text>
-                <TouchableOpacity
-                  style={styles.fallbackBtn}
-                  onPress={handleOpenExternal}
-                  activeOpacity={0.8}>
-                  <Text style={styles.fallbackBtnText}>Open Live View Stream</Text>
-                </TouchableOpacity>
-              </View>
-            )}
+            {url ? <EmbeddedBrowser url={url} /> : null}
           </View>
         </View>
       </View>

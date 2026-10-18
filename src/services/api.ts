@@ -78,7 +78,7 @@ async function authToken(): Promise<string | undefined> {
   }
 }
 
-async function request<T>(path: string, init: RequestInit = {}, timeoutMs = 20000): Promise<T> {
+async function request<T>(path: string, init: RequestInit = {}, timeoutMs = 75000): Promise<T> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   const token = await authToken();
@@ -98,7 +98,7 @@ async function request<T>(path: string, init: RequestInit = {}, timeoutMs = 2000
     }
     return body as T;
   } catch (err: any) {
-    if (err?.name === 'AbortError') throw new Error('The agent backend took too long to respond.');
+    if (err?.name === 'AbortError') throw new Error('The server is taking too long (it may be waking up). Please try again.');
     throw err;
   } finally {
     clearTimeout(timer);
@@ -172,6 +172,15 @@ export const ApiService = {
       },
       180000
     );
+  },
+
+  /** Signed-in user's usage today and which services are live on the server */
+  async getMe() {
+    return request<{
+      email: string;
+      usage: { used: number; limit: number };
+      services: { ai: boolean; browser: boolean; google: boolean };
+    }>('/me');
   },
 
   // Connectors (Google OAuth handled by the backend)

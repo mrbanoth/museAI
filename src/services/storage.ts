@@ -132,6 +132,18 @@ const DEFAULT_CONNECTORS: ConnectorItem[] = [
   },
 ];
 
+// Lets screens refresh when another part of the app changes chats (sidebar, header menu)
+type SessionsListener = () => void;
+const sessionListeners = new Set<SessionsListener>();
+const notifySessionsChanged = () => sessionListeners.forEach((l) => l());
+
+export function onSessionsChanged(listener: SessionsListener) {
+  sessionListeners.add(listener);
+  return () => {
+    sessionListeners.delete(listener);
+  };
+}
+
 export const StorageService = {
   // Chat Sessions
   async getAllSessions(): Promise<ChatSession[]> {
@@ -169,6 +181,7 @@ export const StorageService = {
 
   async setActiveSessionId(sessionId: string): Promise<void> {
     await safeStorage.setItem(KEYS.ACTIVE_SESSION_ID, sessionId);
+    notifySessionsChanged();
   },
 
   async createSession(title?: string): Promise<ChatSession> {
@@ -202,6 +215,8 @@ export const StorageService = {
     const activeId = await this.getActiveSessionId();
     if (activeId === sessionId) {
       await this.setActiveSessionId(filtered[0].id);
+    } else {
+      notifySessionsChanged();
     }
   },
 
@@ -215,6 +230,12 @@ export const StorageService = {
     };
     await safeStorage.setItem(KEYS.CHAT_SESSIONS, JSON.stringify([initialSession]));
     await this.setActiveSessionId('main-chat');
+  },
+
+  /** Empties one chat and tells open screens to refresh */
+  async clearSessionMessages(sessionId: string): Promise<void> {
+    await this.saveSessionMessages(sessionId, []);
+    notifySessionsChanged();
   },
 
   async getSessionMessages(sessionId: string): Promise<ChatMessage[]> {
