@@ -172,6 +172,8 @@ export default function SettingsScreen() {
 
   const handleSignOut = async () => {
     await SupabaseService.signOut();
+    // Chats live on the device: don't leave them for the next person who signs in
+    await StorageService.clearAllSessions();
     await StorageService.clearUserAuth();
     showToast('Signed Out');
     router.replace('/' as any);

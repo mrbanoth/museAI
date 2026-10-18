@@ -13,7 +13,6 @@ import {
   View,
   Text,
   StyleSheet,
-  TextInput,
   TouchableOpacity,
   ActivityIndicator,
   KeyboardAvoidingView,
@@ -26,12 +25,6 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import Svg, { Path } from 'react-native-svg';
 import { HugeiconsIcon } from '@hugeicons/react-native';
 import {
-  Mail01Icon,
-  LockPasswordIcon,
-  UserIcon,
-  ArrowRight01Icon,
-  EyeIcon,
-  EyeOffIcon,
 } from '@hugeicons/core-free-icons';
 import { Colors } from '@/constants/colors';
 import { useRouter } from 'expo-router';
@@ -66,12 +59,6 @@ const GoogleBrandIcon = ({ size = 20 }: { size?: number }) => (
 
 export default function SignInScreen() {
   const router = useRouter();
-  const [authMode, setAuthMode] = useState<'signin' | 'signup'>('signin');
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [fullName, setFullName] = useState('');
-  const [showPassword, setShowPassword] = useState(false);
-  const [loading, setLoading] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
@@ -117,8 +104,7 @@ export default function SignInScreen() {
       const session = await SupabaseService.getCurrentSession().catch(() => null);
       if (session?.user) {
         const user = session.user;
-        await StorageService.saveUserAuth({
-          signedIn: true,
+        await StorageService.signInAs({
           name: user.user_metadata?.full_name || user.email?.split('@')[0],
           email: user.email,
           avatar: user.user_metadata?.avatar_url,
@@ -134,69 +120,6 @@ export default function SignInScreen() {
     })();
   }, [router]);
 
-  const handleEmailAuth = async () => {
-    setErrorMessage(null);
-    const cleanEmail = email.trim();
-    const cleanPass = password.trim();
-
-    if (!cleanEmail || !cleanPass) {
-      setErrorMessage('Please enter your email and password');
-      return;
-    }
-
-    if (cleanPass.length < 6) {
-      setErrorMessage('Password must be at least 6 characters');
-      return;
-    }
-
-    setLoading(true);
-    try {
-      if (authMode === 'signup') {
-        const data = await SupabaseService.signUp(cleanEmail, cleanPass, fullName.trim());
-        const user = data.user;
-        if (!data.session) {
-          // Project requires email confirmation before the first sign-in
-          setErrorMessage('Check your inbox to confirm your email, then sign in.');
-          setAuthMode('signin');
-          return;
-        }
-        await StorageService.saveUserAuth({
-          signedIn: true,
-          name: fullName.trim() || cleanEmail.split('@')[0],
-          email: cleanEmail,
-          userId: user?.id,
-        });
-        showToast('Account created successfully!');
-        router.replace('/(tabs)/chat' as any);
-      } else {
-        const data = await SupabaseService.signIn(cleanEmail, cleanPass);
-        const user = data.user;
-        const name = user?.user_metadata?.full_name || cleanEmail.split('@')[0];
-        await StorageService.saveUserAuth({
-          signedIn: true,
-          name,
-          email: cleanEmail,
-          userId: user?.id,
-        });
-        showToast(`Welcome back, ${name}!`);
-        router.replace('/(tabs)/chat' as any);
-      }
-    } catch (err: any) {
-      console.warn('Auth Error:', err.message);
-      if (err.message?.includes('Invalid login credentials')) {
-        setErrorMessage('Invalid email or password.');
-      } else if (err.message?.includes('User already registered')) {
-        setErrorMessage('This email is already registered. Please Sign In.');
-      } else if (err.message?.includes('Email not confirmed')) {
-        setErrorMessage('Please confirm your email first (check your inbox).');
-      } else {
-        setErrorMessage(err.message || 'Sign-in failed. Please try again.');
-      }
-    } finally {
-      setLoading(false);
-    }
-  };
-
   const handleGoogleSignIn = async () => {
     setGoogleLoading(true);
     setErrorMessage(null);
@@ -204,8 +127,7 @@ export default function SignInScreen() {
       const session = await SupabaseService.signInWithGoogle();
       if (session?.user) {
         const user = session.user;
-        await StorageService.saveUserAuth({
-          signedIn: true,
+        await StorageService.signInAs({
           name: user.user_metadata?.full_name || user.email?.split('@')[0],
           email: user.email,
           avatar: user.user_metadata?.avatar_url,
@@ -254,41 +176,6 @@ export default function SignInScreen() {
 
           {/* Auth Card */}
           <View style={styles.card}>
-            {/* Mode Switcher Tabs */}
-            <View style={styles.tabBar}>
-              <TouchableOpacity
-                style={[styles.tabBtn, authMode === 'signin' && styles.tabBtnActive]}
-                onPress={() => {
-                  setAuthMode('signin');
-                  setErrorMessage(null);
-                }}
-                activeOpacity={0.8}>
-                <Text
-                  style={[
-                    styles.tabBtnText,
-                    authMode === 'signin' && styles.tabBtnTextActive,
-                  ]}>
-                  Sign In
-                </Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={[styles.tabBtn, authMode === 'signup' && styles.tabBtnActive]}
-                onPress={() => {
-                  setAuthMode('signup');
-                  setErrorMessage(null);
-                }}
-                activeOpacity={0.8}>
-                <Text
-                  style={[
-                    styles.tabBtnText,
-                    authMode === 'signup' && styles.tabBtnTextActive,
-                  ]}>
-                  Create Account
-                </Text>
-              </TouchableOpacity>
-            </View>
-
             {/* Error Banner */}
             {errorMessage ? (
               <View style={styles.errorBox}>
@@ -296,85 +183,10 @@ export default function SignInScreen() {
               </View>
             ) : null}
 
-            {/* Full Name field if Sign Up */}
-            {authMode === 'signup' ? (
-              <View style={styles.inputWrap}>
-                <HugeiconsIcon icon={UserIcon} size={18} color={Colors.iconMuted} />
-                <TextInput
-                  style={styles.textInput}
-                  placeholder="Your Full Name"
-                  placeholderTextColor={Colors.iconMuted}
-                  value={fullName}
-                  onChangeText={setFullName}
-                  autoCapitalize="words"
-                />
-              </View>
-            ) : null}
-
-            {/* Email Field */}
-            <View style={styles.inputWrap}>
-              <HugeiconsIcon icon={Mail01Icon} size={18} color={Colors.iconMuted} />
-              <TextInput
-                style={styles.textInput}
-                placeholder="Email Address"
-                placeholderTextColor={Colors.iconMuted}
-                value={email}
-                onChangeText={setEmail}
-                keyboardType="email-address"
-                autoCapitalize="none"
-              />
-            </View>
-
-            {/* Password Field */}
-            <View style={styles.inputWrap}>
-              <HugeiconsIcon icon={LockPasswordIcon} size={18} color={Colors.iconMuted} />
-              <TextInput
-                style={styles.textInput}
-                placeholder="Password (6+ characters)"
-                placeholderTextColor={Colors.iconMuted}
-                value={password}
-                onChangeText={setPassword}
-                secureTextEntry={!showPassword}
-                autoCapitalize="none"
-              />
-              <TouchableOpacity
-                onPress={() => setShowPassword(!showPassword)}
-                activeOpacity={0.7}
-                style={styles.eyeBtn}>
-                <HugeiconsIcon
-                  icon={showPassword ? EyeOffIcon : EyeIcon}
-                  size={18}
-                  color={Colors.iconMuted}
-                />
-              </TouchableOpacity>
-            </View>
-
-            {/* Submit Button */}
-            <TouchableOpacity
-              style={styles.submitBtn}
-              onPress={handleEmailAuth}
-              disabled={loading}
-              activeOpacity={0.85}>
-              {loading ? (
-                <ActivityIndicator size="small" color={Colors.white} />
-              ) : (
-                <View style={styles.submitBtnContent}>
-                  <Text style={styles.submitBtnText}>
-                    {authMode === 'signin' ? 'Sign In to Muse' : 'Create Muse Account'}
-                  </Text>
-                  <HugeiconsIcon icon={ArrowRight01Icon} size={16} color={Colors.white} strokeWidth={2.4} />
-                </View>
-              )}
-            </TouchableOpacity>
-
-            {/* Divider */}
-            <View style={styles.dividerRow}>
-              <View style={styles.dividerLine} />
-              <Text style={styles.dividerText}>or continue with</Text>
-              <View style={styles.dividerLine} />
-            </View>
+            <Text style={styles.googleHint}>Sign in with your Google account to start.</Text>
 
             {/* Google Sign In */}
+
             <TouchableOpacity
               style={styles.googleBtn}
               onPress={handleGoogleSignIn}
@@ -397,6 +209,12 @@ export default function SignInScreen() {
 }
 
 const styles = StyleSheet.create({
+  googleHint: {
+    fontSize: 14,
+    color: Colors.textSecondary,
+    textAlign: 'center',
+    marginBottom: 16,
+  },
   container: {
     flex: 1,
     backgroundColor: '#FFFFFF',

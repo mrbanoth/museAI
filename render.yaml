@@ -23,7 +23,7 @@ services:
         sync: false
       # Who may sign in: you@gmail.com (only you), @gmail.com (any Gmail), * (anyone). Required.
       - key: ALLOWED_EMAILS
-        sync: false
+        value: "@gmail.com"
       # Server clock: task schedules like "Daily at 9:00" use this timezone
       - key: TZ
         value: Asia/Kolkata

@@ -340,6 +340,15 @@ export const StorageService = {
     }
   },
 
+  /** Saves the signed-in user; a different account on this device starts with empty chats */
+  async signInAs(user: { name?: string; email?: string; avatar?: string; userId: string }): Promise<void> {
+    const previous = await this.getUserAuth();
+    if (previous?.userId && previous.userId !== user.userId) {
+      await this.clearAllSessions();
+    }
+    await this.saveUserAuth({ signedIn: true, ...user });
+  },
+
   async clearUserAuth(): Promise<void> {
     await safeStorage.removeItem(KEYS.USER_AUTH);
   },
