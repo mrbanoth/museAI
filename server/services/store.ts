@@ -40,9 +40,22 @@ export interface FeedRecord {
   taskId?: string;
 }
 
+/** OAuth credentials for a linked third-party account (e.g. gmail, gcal) */
+export interface ConnectionRecord {
+  id: string;
+  email?: string;
+  scopes: string[];
+  accessToken: string;
+  refreshToken?: string;
+  /** Epoch ms when the access token expires */
+  expiresAt: number;
+  connectedAt: string;
+}
+
 interface DbShape {
   tasks: TaskRecord[];
   feed: FeedRecord[];
+  connections: Record<string, ConnectionRecord>;
 }
 
 const DATA_DIR = process.env.MUSE_DATA_DIR || path.join(__dirname, '..', 'data');
@@ -53,9 +66,9 @@ function load(): DbShape {
   try {
     const raw = fs.readFileSync(DB_FILE, 'utf8');
     const parsed = JSON.parse(raw);
-    return { tasks: parsed.tasks || [], feed: parsed.feed || [] };
+    return { tasks: parsed.tasks || [], feed: parsed.feed || [], connections: parsed.connections || {} };
   } catch {
-    return { tasks: [], feed: [] };
+    return { tasks: [], feed: [], connections: {} };
   }
 }
 
@@ -69,7 +82,8 @@ function persist() {
     try {
       fs.mkdirSync(DATA_DIR, { recursive: true });
       const tmp = `${DB_FILE}.tmp`;
-      fs.writeFileSync(tmp, JSON.stringify(db, null, 2));
+      // Contains OAuth tokens: readable by the server user only
+      fs.writeFileSync(tmp, JSON.stringify(db, null, 2), { mode: 0o600 });
       fs.renameSync(tmp, DB_FILE);
     } catch (e: any) {
       console.error('[Store] Failed to persist db:', e.message);
@@ -137,5 +151,21 @@ export const Store = {
     if (db.feed.length > MAX_FEED) db.feed.length = MAX_FEED;
     persist();
     return record;
+  },
+
+  getConnection(id: string): ConnectionRecord | undefined {
+    return db.connections[id];
+  },
+
+  saveConnection(record: ConnectionRecord) {
+    db.connections[record.id] = record;
+    persist();
+  },
+
+  deleteConnection(id: string): boolean {
+    const existed = !!db.connections[id];
+    delete db.connections[id];
+    persist();
+    return existed;
   },
 };

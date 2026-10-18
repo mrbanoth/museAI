@@ -40,6 +40,16 @@ export interface AgentActionData {
   details?: any;
 }
 
+export interface ConnectorStatus {
+  id: string;
+  name: string;
+  /** Server has Google OAuth credentials configured */
+  available: boolean;
+  connected: boolean;
+  email?: string;
+  connectedAt?: string;
+}
+
 export interface ChatApiResponse {
   success: boolean;
   error?: string;
@@ -144,6 +154,25 @@ export const ApiService = {
       },
       180000
     );
+  },
+
+  // Connectors (Google OAuth handled by the backend)
+  async listConnectors(): Promise<ConnectorStatus[]> {
+    const res = await request<{ connectors: ConnectorStatus[] }>('/connectors');
+    return res.connectors;
+  },
+
+  /** Returns the Google consent URL to open in a browser */
+  async getConnectUrl(id: string, returnTo?: string) {
+    const res = await request<{ url: string }>(`/connectors/${id}/connect`, {
+      method: 'POST',
+      body: JSON.stringify({ returnTo }),
+    });
+    return res.url;
+  },
+
+  async disconnectConnector(id: string) {
+    await request(`/connectors/${id}`, { method: 'DELETE' });
   },
 
   async listSessions() {

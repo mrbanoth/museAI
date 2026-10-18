@@ -6,7 +6,8 @@ export type MuseEventType =
   | 'task.run.started'
   | 'task.run.finished'
   | 'feed.added'
-  | 'agent.step';
+  | 'agent.step'
+  | 'connector.updated';
 
 export interface MuseEvent {
   seq: number;

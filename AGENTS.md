@@ -77,10 +77,11 @@ muse_ai_clone/
 │   └── utils/time.ts          # Relative time labels
 ├── server/                    # Agent backend (npm run server)
 │   ├── index.ts               # Express app, optional bearer auth, starts scheduler
-│   ├── routes/                # chat, tasks (CRUD + run), feed, sessions, events
+│   ├── routes/                # chat, tasks (CRUD + run), feed, sessions, events, connectors
 │   ├── services/
 │   │   ├── agentEngine.ts     # Gemini multi-step tool loop (basic mode without key)
 │   │   ├── browserbase.ts     # Cloud browser, live view, search, fetch, URL guard
+│   │   ├── google.ts          # Gmail + Calendar OAuth, token refresh, REST helpers
 │   │   ├── scheduler.ts       # Runs due tasks every 30s, posts results to feed
 │   │   ├── schedule.ts        # "Every 6 hours" / "Daily at 9:00" parser
 │   │   ├── events.ts          # Event bus for live updates
@@ -94,6 +95,7 @@ muse_ai_clone/
 - **Tasks** live on the backend and run automatically on their schedule (server local time). Manual runs return `202` immediately.
 - **Progress** is pushed as events (`agent.step`, `task.updated`, `feed.added`, …) over `/api/events/stream` (SSE) or `/api/events?since=<seq>` (long-poll). Chat/idea requests pass a `requestId` so their steps can be matched.
 - **Live browser**: `agent.step` events carry the Browserbase `liveViewUrl` (`sessions.debug().debuggerFullscreenUrl`) while a session runs; `replayUrl` points to the recording.
+- **Connectors**: Gmail (read-only) and Google Calendar use server-side OAuth (`/api/connectors/:id/connect` → Google → public `/api/connectors/google/callback`). Tokens are stored in `server/data/db.json` (mode 600). The agent only gets Gmail/Calendar tools while that account is connected. Other connectors are placeholders.
 - **Configuration**: copy `.env.example` to `.env`. Without `GEMINI_API_KEY` the agent runs in basic mode; without `BROWSERBASE_API_KEY` pages are fetched over HTTP.
 
 ---

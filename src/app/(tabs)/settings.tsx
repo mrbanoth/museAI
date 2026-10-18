@@ -43,6 +43,9 @@ import { ConnectorItem } from '@/types';
 import { showToast } from '@/context/ToastContext';
 import { StorageService } from '@/services/storage';
 import { SupabaseService } from '@/services/supabase';
+import { ApiService, subscribeEvents } from '@/services/api';
+import * as WebBrowser from 'expo-web-browser';
+import * as Linking from 'expo-linking';
 import { MascotAvatar, BrandLogoIcon } from '@/components/common';
 
 export default function SettingsScreen() {
@@ -57,7 +60,36 @@ export default function SettingsScreen() {
     const auth = await StorageService.getUserAuth();
     if (auth) setUserAuth(auth);
     const connList = await StorageService.getConnectors();
-    setConnectors(connList);
+    // Gmail & Calendar are real OAuth connectors managed by the agent server
+    let live: Awaited<ReturnType<typeof ApiService.listConnectors>> = [];
+    try {
+      live = await ApiService.listConnectors();
+    } catch {}
+    setConnectors(
+      connList.map((c) => {
+        const status = live.find((l) => l.id === c.id);
+        return status
+          ? { ...c, live: status.available, connected: status.connected, accountEmail: status.email }
+          : { ...c, connected: false };
+      })
+    );
+  }, []);
+
+  useEffect(() => {
+    return subscribeEvents((event) => {
+      if (event.type === 'connector.updated') loadData();
+    });
+  }, [loadData]);
+
+  // Web returns here from Google with ?connector=gmail&status=connected
+  useEffect(() => {
+    if (Platform.OS !== 'web' || typeof window === 'undefined') return;
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('status') === 'connected' && params.get('connector')) {
+      showToast('Account connected');
+      setIsConnectorsOpen(true);
+      window.history.replaceState(null, '', window.location.pathname);
+    }
   }, []);
 
   useFocusEffect(
@@ -103,14 +135,39 @@ export default function SettingsScreen() {
 
   const handleToggleConnector = async (id: string, name: string) => {
     const current = connectors.find((c) => c.id === id);
-    if (!current?.connected) {
-      // No OAuth integrations exist yet; don't pretend the account is linked
-      showToast(`${name} integration is coming soon`);
+    if (!current?.live) {
+      showToast(
+        id === 'gmail' || id === 'gcal'
+          ? `${name} needs Google OAuth set up on the server (see .env.example)`
+          : `${name} integration is coming soon`
+      );
       return;
     }
-    const updated = await StorageService.toggleConnector(id);
-    setConnectors(updated);
-    showToast(`Disconnected ${name}`);
+
+    try {
+      if (current.connected) {
+        await ApiService.disconnectConnector(id);
+        showToast(`Disconnected ${name}`);
+        loadData();
+        return;
+      }
+
+      if (Platform.OS === 'web') {
+        const returnTo = `${window.location.origin}${window.location.pathname}`;
+        window.location.href = await ApiService.getConnectUrl(id, returnTo);
+        return;
+      }
+
+      const returnTo = Linking.createURL('settings');
+      const url = await ApiService.getConnectUrl(id, returnTo);
+      const result = await WebBrowser.openAuthSessionAsync(url, returnTo);
+      if (result.type === 'success' && result.url.includes('status=connected')) {
+        showToast(`${name} connected`);
+      }
+      loadData();
+    } catch (e: any) {
+      showToast(e.message || `Could not connect ${name}`);
+    }
   };
 
   const handleSignOut = async () => {
@@ -348,7 +405,7 @@ export default function SettingsScreen() {
                     <View style={styles.connectorInfo}>
                       <Text style={styles.connectorName}>{item.name}</Text>
                       <Text style={styles.connectorDesc} numberOfLines={1}>
-                        {item.description}
+                        {item.accountEmail || item.description}
                       </Text>
                     </View>
                     <TouchableOpacity
@@ -381,7 +438,7 @@ export default function SettingsScreen() {
                       style={styles.connectBtn}
                       onPress={() => handleToggleConnector(item.id, item.name)}
                       activeOpacity={0.8}>
-                      <Text style={styles.connectBtnText}>Soon</Text>
+                      <Text style={styles.connectBtnText}>{item.live ? 'Connect' : 'Soon'}</Text>
                     </TouchableOpacity>
                   </View>
                 ))}

@@ -132,7 +132,7 @@ export interface AgentTask {
  */
 export interface MuseEvent {
   seq: number;
-  type: 'task.updated' | 'task.deleted' | 'task.run.started' | 'task.run.finished' | 'feed.added' | 'agent.step';
+  type: 'task.updated' | 'task.deleted' | 'task.run.started' | 'task.run.finished' | 'feed.added' | 'agent.step' | 'connector.updated';
   at: string;
   requestId?: string;
   data: any;
@@ -177,6 +177,8 @@ export interface ConnectorItem {
   category: string;
   /** Linked account identifier or email when active */
   accountEmail?: string;
+  /** Backed by a real OAuth integration on the agent server */
+  live?: boolean;
 }
 
 /**
