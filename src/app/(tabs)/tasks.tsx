@@ -180,7 +180,7 @@ export default function GoalsScreen() {
         showsVerticalScrollIndicator={false}>
         {/* Header */}
         <View style={styles.headerRow}>
-          <View>
+          <View style={styles.headerTextCol}>
             <Text style={styles.pageTitle}>Task / Goal</Text>
             <Text style={styles.subtitle}>Scheduled autonomous routines & watchers</Text>
           </View>
@@ -469,6 +469,10 @@ export default function GoalsScreen() {
 }
 
 const styles = StyleSheet.create({
+  headerTextCol: {
+    flex: 1,
+    marginRight: 12,
+  },
   cardMeta: {
     fontSize: 12,
     color: Colors.iconMuted,

@@ -1,11 +1,17 @@
 import { Platform } from 'react-native';
 import Constants from 'expo-constants';
 import { AgentTask, FeedItem, MuseEvent } from '@/types';
+import { supabase } from '@/services/supabase';
 
 // Resolve the backend: explicit env var first, then the Metro host (same machine as `npm run server`)
 const getApiBaseUrl = () => {
   const explicit = process.env.EXPO_PUBLIC_API_URL;
   if (explicit) return explicit.replace(/\/$/, '');
+
+  // Deployed web build is served by the agent server itself: same origin
+  if (Platform.OS === 'web' && typeof window !== 'undefined' && !['localhost', '127.0.0.1'].includes(window.location.hostname)) {
+    return `${window.location.origin}/api`;
+  }
 
   const hostUri =
     Constants.expoConfig?.hostUri ||
@@ -61,16 +67,28 @@ export interface ChatApiResponse {
   };
 }
 
+/** Bearer token for the agent server: shared secret if configured, else the Supabase session */
+async function authToken(): Promise<string | undefined> {
+  if (API_TOKEN) return API_TOKEN;
+  try {
+    const { data } = await supabase.auth.getSession();
+    return data.session?.access_token;
+  } catch {
+    return undefined;
+  }
+}
+
 async function request<T>(path: string, init: RequestInit = {}, timeoutMs = 20000): Promise<T> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
+  const token = await authToken();
   try {
     const res = await fetch(`${API_BASE_URL}${path}`, {
       ...init,
       signal: controller.signal,
       headers: {
         'Content-Type': 'application/json',
-        ...(API_TOKEN ? { Authorization: `Bearer ${API_TOKEN}` } : {}),
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
         ...(init.headers || {}),
       },
     });
@@ -205,17 +223,35 @@ function dispatch(event: MuseEvent) {
 }
 
 function connectSse() {
-  const params = new URLSearchParams();
-  if (lastSeq !== undefined) params.set('since', String(lastSeq));
-  if (API_TOKEN) params.set('token', API_TOKEN);
-  const source = new (globalThis as any).EventSource(`${API_BASE_URL}/events/stream?${params}`);
-  source.onmessage = (msg: { data: string }) => {
-    try {
-      dispatch(JSON.parse(msg.data));
-    } catch {}
+  let source: any = null;
+  let active = true;
+  let retry: ReturnType<typeof setTimeout> | null = null;
+
+  const open = async () => {
+    // Fresh token on every (re)connect: Supabase access tokens expire hourly
+    const token = await authToken();
+    if (!active) return;
+    const params = new URLSearchParams();
+    if (lastSeq !== undefined) params.set('since', String(lastSeq));
+    if (token) params.set('token', token);
+    source = new (globalThis as any).EventSource(`${API_BASE_URL}/events/stream?${params}`);
+    source.onmessage = (msg: { data: string }) => {
+      try {
+        dispatch(JSON.parse(msg.data));
+      } catch {}
+    };
+    source.onerror = () => {
+      source?.close();
+      if (active) retry = setTimeout(open, 4000);
+    };
   };
-  // EventSource reconnects automatically and resumes from Last-Event-ID
-  return () => source.close();
+  open();
+
+  return () => {
+    active = false;
+    if (retry) clearTimeout(retry);
+    source?.close();
+  };
 }
 
 function connectLongPoll() {

@@ -96,6 +96,8 @@ muse_ai_clone/
 - **Progress** is pushed as events (`agent.step`, `task.updated`, `feed.added`, …) over `/api/events/stream` (SSE) or `/api/events?since=<seq>` (long-poll). Chat/idea requests pass a `requestId` so their steps can be matched.
 - **Live browser**: `agent.step` events carry the Browserbase `liveViewUrl` (`sessions.debug().debuggerFullscreenUrl`) while a session runs; `replayUrl` points to the recording.
 - **Connectors**: Gmail (read-only) and Google Calendar use server-side OAuth (`/api/connectors/:id/connect` → Google → public `/api/connectors/google/callback`). Tokens are stored in `server/data/db.json` (mode 600). The agent only gets Gmail/Calendar tools while that account is connected. Other connectors are placeholders.
+- **Deploy**: `render.yaml` runs one Render web service (`npm run build` → `npm run start:prod`) serving API + web app from `dist/`. Phone-only setup steps: `SETUP.md`.
+- **API auth**: `server/services/auth.ts` verifies the Supabase session token; only `ALLOWED_EMAILS` may call `/api` (health and the OAuth callback stay public).
 - **Configuration**: copy `.env.example` to `.env`. Without `GEMINI_API_KEY` the agent runs in basic mode; without `BROWSERBASE_API_KEY` pages are fetched over HTTP.
 
 ---

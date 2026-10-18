@@ -1,0 +1,31 @@
+# One-click deploy: Render Dashboard → New → Blueprint → pick this repo.
+# A single web service runs the agent API + scheduler and serves the web app.
+services:
+  - type: web
+    name: muse-ai
+    runtime: node
+    plan: free
+    buildCommand: npm ci && npm run build
+    startCommand: npm run start:prod
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_VERSION
+        value: "22"
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: BROWSERBASE_API_KEY
+        sync: false
+      - key: BROWSERBASE_PROJECT_ID
+        sync: false
+      - key: GOOGLE_CLIENT_ID
+        sync: false
+      - key: GOOGLE_CLIENT_SECRET
+        sync: false
+      # Comma-separated Supabase login emails allowed to use this server (required: keeps strangers out)
+      - key: ALLOWED_EMAILS
+        sync: false
+      # Server clock: task schedules like "Daily at 9:00" use this timezone
+      - key: TZ
+        value: Asia/Kolkata
+      - key: GOOGLE_CALENDAR_TZ
+        value: Asia/Kolkata

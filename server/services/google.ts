@@ -28,8 +28,9 @@ const STATE_TTL_MS = 10 * 60_000;
 
 const clientId = () => process.env.GOOGLE_CLIENT_ID || '';
 const clientSecret = () => process.env.GOOGLE_CLIENT_SECRET || '';
-const redirectUri = () =>
-  process.env.GOOGLE_REDIRECT_URI || `http://localhost:${process.env.PORT || 3001}/api/connectors/google/callback`;
+// RENDER_EXTERNAL_URL is set automatically on Render (e.g. https://muse-ai.onrender.com)
+const publicUrl = () => process.env.PUBLIC_URL || process.env.RENDER_EXTERNAL_URL || `http://localhost:${process.env.PORT || 3001}`;
+const redirectUri = () => process.env.GOOGLE_REDIRECT_URI || `${publicUrl()}/api/connectors/google/callback`;
 
 export const isGoogleConfigured = () => !!clientId() && !!clientSecret();
 
@@ -69,7 +70,7 @@ function isAllowedReturnUrl(raw?: string): boolean {
     if (['museaiclone:', 'exp:', 'exps:'].includes(url.protocol)) return true;
     if (url.protocol !== 'http:' && url.protocol !== 'https:') return false;
     if (url.hostname === 'localhost' || url.hostname === '127.0.0.1') return true;
-    const allowed = [process.env.APP_URL, ...(process.env.CORS_ORIGINS?.split(',') || [])]
+    const allowed = [process.env.APP_URL, publicUrl(), ...(process.env.CORS_ORIGINS?.split(',') || [])]
       .map((o) => o?.trim())
       .filter(Boolean);
     return allowed.includes(url.origin);
