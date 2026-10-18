@@ -29,8 +29,10 @@ import {
 import { Colors } from '@/constants/colors';
 import { FeedItem } from '@/types';
 import { showToast } from '@/context/ToastContext';
-import { ApiService } from '@/services/api';
+import { ApiService, subscribeEvents } from '@/services/api';
+import { StorageService } from '@/services/storage';
 import { LiveBrowserModal } from '@/components/common';
+import { timeAgo } from '@/utils/time';
 
 const CATEGORIES = ['All', 'Autonomous Insight', '1-Tap Idea Execution', 'Goal Execution'];
 
@@ -40,6 +42,7 @@ export default function FeedScreen() {
   const [selectedCategory, setSelectedCategory] = useState('All');
   const [refreshing, setRefreshing] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [liveModal, setLiveModal] = useState<{ visible: boolean; url: string | null; title?: string }>({
     visible: false,
     url: null,
@@ -48,12 +51,10 @@ export default function FeedScreen() {
 
   const loadFeed = useCallback(async () => {
     try {
-      const res = await ApiService.getFeed();
-      if (res.success && Array.isArray(res.feed)) {
-        setFeedItems(res.feed);
-      }
+      setFeedItems(await ApiService.getFeed());
+      setLoadError(null);
     } catch (e: any) {
-      console.warn('Failed to load feed:', e.message);
+      setLoadError(e.message || 'Could not reach the agent backend');
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -63,6 +64,16 @@ export default function FeedScreen() {
   useEffect(() => {
     loadFeed();
   }, [loadFeed]);
+
+  // Live: new results appear as soon as a task or idea finishes
+  useEffect(() => {
+    return subscribeEvents((event) => {
+      if (event.type === 'feed.added') {
+        setFeedItems((prev) => (prev.some((f) => f.id === event.data.id) ? prev : [event.data, ...prev]));
+        setLoadError(null);
+      }
+    });
+  }, []);
 
   const onRefresh = () => {
     setRefreshing(true);
@@ -78,7 +89,17 @@ export default function FeedScreen() {
     });
   };
 
-  const handleDiscussInChat = (item: FeedItem) => {
+  const handleDiscussInChat = async (item: FeedItem) => {
+    // Start a chat seeded with this result so follow-up questions have context
+    const session = await StorageService.createSession(item.title);
+    await StorageService.saveSessionMessages(session.id, [
+      {
+        id: `feed-ctx-${item.id}`,
+        sender: 'agent',
+        text: `**${item.title}**\n\n${item.summary}`,
+        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      },
+    ]);
     showToast(`Opening chat on "${item.title}"`);
     router.push('/(tabs)/chat' as any);
   };
@@ -139,9 +160,13 @@ export default function FeedScreen() {
           {filteredItems.length === 0 ? (
             <View style={styles.emptyContainer}>
               <HugeiconsIcon icon={SparklesIcon} size={36} color={Colors.primary} />
-              <Text style={styles.emptyTitle}>No insights in this category yet</Text>
+              <Text style={styles.emptyTitle}>
+                {loadError ? 'Agent backend offline' : 'No insights in this category yet'}
+              </Text>
               <Text style={styles.emptyDesc}>
-                Execute workflows in the Ideas or Tasks tab to populate your feed stream.
+                {loadError
+                  ? `${loadError}. Start it with "npm run server" and pull to refresh.`
+                  : 'Run a task or a 1-tap idea and its results will appear here live.'}
               </Text>
             </View>
           ) : (
@@ -153,7 +178,7 @@ export default function FeedScreen() {
                     <HugeiconsIcon icon={SparklesIcon} size={13} color={Colors.primary} strokeWidth={2.2} />
                     <Text style={styles.categoryText}>{item.category}</Text>
                   </View>
-                  <Text style={styles.timestampText}>{item.timestamp}</Text>
+                  <Text style={styles.timestampText}>{timeAgo(item.createdAt)}</Text>
                 </View>
 
                 {/* Headline */}

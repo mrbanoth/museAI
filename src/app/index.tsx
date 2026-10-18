@@ -111,11 +111,24 @@ export default function SignInScreen() {
     ).start();
   }, [floatAnim, pulseScale]);
 
-  // Auto-redirect if already signed in
+  // Auto-redirect if already signed in (also completes the web Google OAuth redirect)
   useEffect(() => {
     (async () => {
+      const session = await SupabaseService.getCurrentSession().catch(() => null);
+      if (session?.user) {
+        const user = session.user;
+        await StorageService.saveUserAuth({
+          signedIn: true,
+          name: user.user_metadata?.full_name || user.email?.split('@')[0],
+          email: user.email,
+          avatar: user.user_metadata?.avatar_url,
+          userId: user.id,
+        });
+        router.replace('/(tabs)/chat' as any);
+        return;
+      }
       const auth = await StorageService.getUserAuth();
-      if (auth && auth.signedIn) {
+      if (auth && auth.signedIn && auth.userId) {
         router.replace('/(tabs)/chat' as any);
       }
     })();
@@ -141,6 +154,12 @@ export default function SignInScreen() {
       if (authMode === 'signup') {
         const data = await SupabaseService.signUp(cleanEmail, cleanPass, fullName.trim());
         const user = data.user;
+        if (!data.session) {
+          // Project requires email confirmation before the first sign-in
+          setErrorMessage('Check your inbox to confirm your email, then sign in.');
+          setAuthMode('signin');
+          return;
+        }
         await StorageService.saveUserAuth({
           signedIn: true,
           name: fullName.trim() || cleanEmail.split('@')[0],
@@ -168,15 +187,10 @@ export default function SignInScreen() {
         setErrorMessage('Invalid email or password.');
       } else if (err.message?.includes('User already registered')) {
         setErrorMessage('This email is already registered. Please Sign In.');
+      } else if (err.message?.includes('Email not confirmed')) {
+        setErrorMessage('Please confirm your email first (check your inbox).');
       } else {
-        // Fallback smooth login
-        await StorageService.saveUserAuth({
-          signedIn: true,
-          name: fullName.trim() || cleanEmail.split('@')[0],
-          email: cleanEmail,
-        });
-        showToast('Signed in successfully');
-        router.replace('/(tabs)/chat' as any);
+        setErrorMessage(err.message || 'Sign-in failed. Please try again.');
       }
     } finally {
       setLoading(false);
@@ -187,20 +201,21 @@ export default function SignInScreen() {
     setGoogleLoading(true);
     setErrorMessage(null);
     try {
-      if (Platform.OS === 'web') {
-        await SupabaseService.signInWithGoogle();
-      } else {
+      const session = await SupabaseService.signInWithGoogle();
+      if (session?.user) {
+        const user = session.user;
         await StorageService.saveUserAuth({
           signedIn: true,
-          name: 'Google User',
-          email: 'user@gmail.com',
-          avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150',
+          name: user.user_metadata?.full_name || user.email?.split('@')[0],
+          email: user.email,
+          avatar: user.user_metadata?.avatar_url,
+          userId: user.id,
         });
         showToast('Signed in with Google');
         router.replace('/(tabs)/chat' as any);
       }
-    } catch {
-      showToast('Google Sign-in failed');
+    } catch (err: any) {
+      setErrorMessage(err.message || 'Google sign-in failed');
     } finally {
       setGoogleLoading(false);
     }

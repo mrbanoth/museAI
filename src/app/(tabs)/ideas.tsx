@@ -5,7 +5,7 @@
  * 1-Tap execution launches multi-step cloud research and publishes to Feed.
  */
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -33,7 +33,7 @@ import { Colors } from '@/constants/colors';
 import { IDEA_ITEMS } from '@/constants/dummyData';
 import { IdeaItem } from '@/types';
 import { showToast } from '@/context/ToastContext';
-import { ApiService } from '@/services/api';
+import { ApiService, newRequestId, subscribeEvents } from '@/services/api';
 import { StorageService } from '@/services/storage';
 
 const IDEA_ICONS: Record<string, any> = {
@@ -47,40 +47,44 @@ const IDEA_ICONS: Record<string, any> = {
 export default function IdeasScreen() {
   const router = useRouter();
   const [runningIdeaId, setRunningIdeaId] = useState<string | null>(null);
+  const [liveStep, setLiveStep] = useState<{ requestId: string; text: string } | null>(null);
   const [lastResults, setLastResults] = useState<{ [id: string]: { replayUrl?: string; message?: string } }>({});
+
+  useEffect(() => {
+    return subscribeEvents((event) => {
+      if (event.type === 'agent.step' && event.requestId) {
+        setLiveStep((cur) => (cur && cur.requestId === event.requestId ? { ...cur, text: event.data.text } : cur));
+      }
+    });
+  }, []);
 
   const handleRunIdea = async (item: IdeaItem) => {
     if (runningIdeaId) return;
 
+    const requestId = newRequestId();
     setRunningIdeaId(item.id);
-    showToast(`Launching cloud agent for "${item.title}"...`);
+    setLiveStep({ requestId, text: 'Starting agent...' });
 
     try {
-      const res = await ApiService.runIdea(item);
-      if (res.success) {
-        showToast(`Completed! Added to Feed.`);
-        setLastResults((prev) => ({
-          ...prev,
-          [item.id]: {
-            replayUrl: res.replayUrl || 'https://www.browserbase.com',
-            message: res.message,
-          },
-        }));
-      } else {
-        showToast(res.message || 'Execution completed');
-      }
-    } catch {
-      showToast('Execution error');
+      const res = await ApiService.runIdea(item, requestId);
+      showToast('Completed! Added to Feed.');
+      setLastResults((prev) => ({
+        ...prev,
+        [item.id]: { replayUrl: res.replayUrl, message: res.message },
+      }));
+    } catch (e: any) {
+      showToast(e.message || 'Execution error');
     } finally {
       setRunningIdeaId(null);
+      setLiveStep(null);
     }
   };
 
   const handleDiscussInChat = async (item: IdeaItem) => {
-    // Create new session or switch to chat and load prompt
+    // New chat that immediately sends the idea's prompt to the agent
     const session = await StorageService.createSession(item.title);
     await StorageService.setActiveSessionId(session.id);
-    showToast(`Started new chat on "${item.title}"`);
+    await StorageService.setPendingPrompt(item.prompt);
     router.push('/(tabs)/chat' as any);
   };
 
@@ -150,7 +154,9 @@ export default function IdeasScreen() {
                     {isRunning ? (
                       <>
                         <ActivityIndicator size="small" color={Colors.white} />
-                        <Text style={styles.runBtnText}>Agent Browsing...</Text>
+                        <Text style={styles.runBtnText} numberOfLines={1}>
+                          {liveStep?.text || 'Agent working...'}
+                        </Text>
                       </>
                     ) : (
                       <>

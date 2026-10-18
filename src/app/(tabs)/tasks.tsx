@@ -1,11 +1,10 @@
 /**
  * Goals Tab Screen ('/(tabs)/tasks')
  *
- * Full real-time Goals & Tracking manager:
- * - Real-time Goal creation modal
- * - Real-time Goal deletion
- * - Real-time Checkmark toggle & live execution via Cloud Agent
- * - Persisted in StorageService
+ * Backend-scheduled goals & trackers:
+ * - Tasks persist on the agent server and run automatically on their schedule
+ * - Manual "Run now" streams progress back over live events
+ * - Results are posted to the Feed
  */
 
 import React, { useState, useEffect, useCallback } from 'react';
@@ -33,15 +32,31 @@ import {
 } from '@hugeicons/core-free-icons';
 import { Colors } from '@/constants/colors';
 import { showToast } from '@/context/ToastContext';
-import { ApiService } from '@/services/api';
-import { StorageService, RealGoalItem } from '@/services/storage';
+import { ApiService, subscribeEvents } from '@/services/api';
 import { LiveBrowserModal } from '@/components/common';
+import { AgentTask } from '@/types';
+import { timeAgo } from '@/utils/time';
+
+const SCHEDULE_PRESETS = ['Manual', 'Every 1 hours', 'Every 6 hours', 'Daily at 9:00 AM', 'Weekly on Monday at 9:00 AM'];
+
+type GoalItem = AgentTask & { liveStep?: string };
+
+function describeSchedule(item: GoalItem) {
+  const parts = [item.schedule];
+  if (item.status === 'paused') parts.push('paused');
+  else if (item.nextRunAt) parts.push(`next ${timeAgo(item.nextRunAt)}`);
+  if (item.lastRunAt) parts.push(`last ${timeAgo(item.lastRunAt)}${item.lastStatus === 'FAILED' ? ' (failed)' : ''}`);
+  return parts.join(' · ');
+}
 
 export default function GoalsScreen() {
-  const [items, setItems] = useState<RealGoalItem[]>([]);
+  const [items, setItems] = useState<GoalItem[]>([]);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [newTitle, setNewTitle] = useState('');
   const [newSubtitle, setNewSubtitle] = useState('');
+  const [newUrl, setNewUrl] = useState('');
+  const [newSchedule, setNewSchedule] = useState('Daily at 9:00 AM');
   const [newCategory, setNewCategory] = useState<'tracking' | 'goals'>('tracking');
   const [liveModal, setLiveModal] = useState<{ visible: boolean; url: string | null; title?: string }>({
     visible: false,
@@ -50,8 +65,12 @@ export default function GoalsScreen() {
   });
 
   const loadGoals = useCallback(async () => {
-    const data = await StorageService.getGoals();
-    setItems(data);
+    try {
+      setItems(await ApiService.listTasks());
+      setLoadError(null);
+    } catch (e: any) {
+      setLoadError(e.message || 'Could not reach the agent backend');
+    }
   }, []);
 
   useFocusEffect(
@@ -60,15 +79,44 @@ export default function GoalsScreen() {
     }, [loadGoals])
   );
 
-  const toggleCheck = async (id: string) => {
-    const updated = await StorageService.toggleGoalCheck(id);
-    setItems(updated);
+  // Live task state, progress steps and live browser views
+  useEffect(() => {
+    return subscribeEvents((event) => {
+      if (event.type === 'task.updated' && event.data) {
+        setItems((prev) => {
+          const exists = prev.some((t) => t.id === event.data.id);
+          const merged = { ...event.data, liveStep: event.data.isRunning ? prev.find((t) => t.id === event.data.id)?.liveStep : undefined };
+          return exists ? prev.map((t) => (t.id === event.data.id ? merged : t)) : [merged, ...prev];
+        });
+      } else if (event.type === 'task.deleted') {
+        setItems((prev) => prev.filter((t) => t.id !== event.data.id));
+      } else if (event.type === 'agent.step' && event.requestId?.startsWith('task:')) {
+        const taskId = event.requestId.slice(5);
+        setItems((prev) => prev.map((t) => (t.id === taskId ? { ...t, liveStep: event.data.text } : t)));
+      } else if (event.type === 'task.run.finished') {
+        showToast(event.data.status === 'FAILED' ? 'Task run failed — see Feed' : 'Task finished — posted to Feed');
+      }
+    });
+  }, []);
+
+  const toggleCheck = async (item: GoalItem) => {
+    setItems((prev) => prev.map((g) => (g.id === item.id ? { ...g, checked: !g.checked } : g)));
+    try {
+      await ApiService.updateTask(item.id, { checked: !item.checked, status: !item.checked ? 'done' : 'active' });
+    } catch (e: any) {
+      showToast(e.message);
+      loadGoals();
+    }
   };
 
   const handleDeleteGoal = async (id: string, title: string) => {
-    const updated = await StorageService.deleteGoal(id);
-    setItems(updated);
-    showToast(`Deleted "${title}"`);
+    try {
+      await ApiService.deleteTask(id);
+      setItems((prev) => prev.filter((g) => g.id !== id));
+      showToast(`Deleted "${title}"`);
+    } catch (e: any) {
+      showToast(e.message);
+    }
   };
 
   const handleCreateGoal = async () => {
@@ -77,46 +125,38 @@ export default function GoalsScreen() {
       showToast('Please enter a goal title');
       return;
     }
-
-    const created = await StorageService.createGoal(
-      title,
-      newSubtitle.trim() || 'Custom autonomous goal tracked by Muse AI',
-      newCategory
-    );
-
-    setItems((prev) => [created, ...prev]);
-    setNewTitle('');
-    setNewSubtitle('');
-    setIsCreateModalOpen(false);
-    showToast(`Created goal: "${title}"`);
-  };
-
-  const handleRunGoal = async (goal: RealGoalItem) => {
-    setItems((prev) =>
-      prev.map((g) => (g.id === goal.id ? { ...g, isRunning: true } : g))
-    );
-    showToast(`Muse is executing "${goal.title}"...`);
+    const url = newUrl.trim();
+    if (url && !/^https?:\/\//i.test(url)) {
+      showToast('URL must start with http:// or https://');
+      return;
+    }
 
     try {
-      const res = await ApiService.runTask(goal.id, goal.title);
-      if (res.success) {
-        showToast('Execution finished! Replay generated.');
-        const updated = items.map((g) =>
-          g.id === goal.id
-            ? { ...g, isRunning: false, replayUrl: res.replayUrl || 'https://www.browserbase.com' }
-            : g
-        );
-        setItems(updated);
-        await StorageService.saveGoals(updated);
-      } else {
-        showToast('Execution completed.');
-      }
-    } catch {
-      showToast('Failed to run task');
-    } finally {
-      setItems((prev) =>
-        prev.map((g) => (g.id === goal.id ? { ...g, isRunning: false } : g))
-      );
+      const created = await ApiService.createTask({
+        title,
+        subtitle: newSubtitle.trim(),
+        url: url || undefined,
+        schedule: newSchedule,
+        category: newCategory,
+      });
+      setItems((prev) => (prev.some((t) => t.id === created.id) ? prev : [created, ...prev]));
+      setNewTitle('');
+      setNewSubtitle('');
+      setNewUrl('');
+      setIsCreateModalOpen(false);
+      showToast(`Created "${title}" (${created.schedule})`);
+    } catch (e: any) {
+      showToast(e.message || 'Failed to create task');
+    }
+  };
+
+  const handleRunGoal = async (goal: GoalItem) => {
+    setItems((prev) => prev.map((g) => (g.id === goal.id ? { ...g, isRunning: true, liveStep: 'Starting...' } : g)));
+    try {
+      await ApiService.runTask(goal.id);
+    } catch (e: any) {
+      showToast(e.message || 'Failed to start task');
+      setItems((prev) => prev.map((g) => (g.id === goal.id ? { ...g, isRunning: false, liveStep: undefined } : g)));
     }
   };
 
@@ -154,7 +194,15 @@ export default function GoalsScreen() {
           </TouchableOpacity>
         </View>
 
-        {/* 🟢 TRACKING SECTION */}
+        {loadError ? (
+          <View style={styles.errorBanner}>
+            <Text style={styles.errorBannerText}>
+              Agent backend offline ({loadError}). Start it with "npm run server".
+            </Text>
+          </View>
+        ) : null}
+
+        {/* TRACKING SECTION */}
         <View style={styles.sectionHeaderRow}>
           <View style={styles.sectionDotGreen} />
           <Text style={styles.sectionTitle}>Tracking ({trackingItems.length})</Text>
@@ -166,7 +214,7 @@ export default function GoalsScreen() {
               {/* Checkbox */}
               <TouchableOpacity
                 style={[styles.checkbox, item.checked && styles.checkboxChecked]}
-                onPress={() => toggleCheck(item.id)}
+                onPress={() => toggleCheck(item)}
                 activeOpacity={0.7}>
                 {item.checked && (
                   <HugeiconsIcon
@@ -185,8 +233,13 @@ export default function GoalsScreen() {
                   numberOfLines={1}>
                   {item.title}
                 </Text>
-                <Text style={styles.cardSubtitle} numberOfLines={2}>
-                  {item.subtitle}
+                {item.subtitle ? (
+                  <Text style={styles.cardSubtitle} numberOfLines={2}>
+                    {item.subtitle}
+                  </Text>
+                ) : null}
+                <Text style={styles.cardMeta} numberOfLines={1}>
+                  {item.isRunning && item.liveStep ? item.liveStep : describeSchedule(item)}
                 </Text>
               </View>
 
@@ -201,10 +254,10 @@ export default function GoalsScreen() {
 
             {/* Bottom Actions Row */}
             <View style={styles.cardBottomRow}>
-              {item.replayUrl ? (
+              {item.lastReplayUrl ? (
                 <TouchableOpacity
                   style={styles.replayBadge}
-                  onPress={() => handleOpenLink(item.replayUrl, item.title)}
+                  onPress={() => handleOpenLink(item.lastReplayUrl, item.title)}
                   activeOpacity={0.7}>
                   <HugeiconsIcon icon={Globe02Icon} size={13} color={Colors.primary} strokeWidth={2.2} />
                   <Text style={styles.replayText}>Cloud Replay</Text>
@@ -229,7 +282,7 @@ export default function GoalsScreen() {
           </View>
         ))}
 
-        {/* 🔵 GOALS SECTION */}
+        {/* GOALS SECTION */}
         <View style={[styles.sectionHeaderRow, { marginTop: 24 }]}>
           <View style={styles.sectionDotBlue} />
           <Text style={styles.sectionTitle}>Goals ({goalItems.length})</Text>
@@ -241,7 +294,7 @@ export default function GoalsScreen() {
               {/* Checkbox */}
               <TouchableOpacity
                 style={[styles.checkbox, item.checked && styles.checkboxChecked]}
-                onPress={() => toggleCheck(item.id)}
+                onPress={() => toggleCheck(item)}
                 activeOpacity={0.7}>
                 {item.checked && (
                   <HugeiconsIcon
@@ -260,8 +313,13 @@ export default function GoalsScreen() {
                   numberOfLines={1}>
                   {item.title}
                 </Text>
-                <Text style={styles.cardSubtitle} numberOfLines={2}>
-                  {item.subtitle}
+                {item.subtitle ? (
+                  <Text style={styles.cardSubtitle} numberOfLines={2}>
+                    {item.subtitle}
+                  </Text>
+                ) : null}
+                <Text style={styles.cardMeta} numberOfLines={1}>
+                  {item.isRunning && item.liveStep ? item.liveStep : describeSchedule(item)}
                 </Text>
               </View>
 
@@ -365,6 +423,30 @@ export default function GoalsScreen() {
               multiline
             />
 
+            <TextInput
+              style={styles.modalInput}
+              placeholder="Page to check (optional, https://...)"
+              placeholderTextColor={Colors.iconMuted}
+              value={newUrl}
+              onChangeText={setNewUrl}
+              autoCapitalize="none"
+              keyboardType="url"
+            />
+
+            <Text style={styles.scheduleLabel}>Schedule</Text>
+            <View style={styles.scheduleRow}>
+              {SCHEDULE_PRESETS.map((preset) => (
+                <TouchableOpacity
+                  key={preset}
+                  style={[styles.schedulePill, newSchedule === preset && styles.schedulePillActive]}
+                  onPress={() => setNewSchedule(preset)}>
+                  <Text style={[styles.schedulePillText, newSchedule === preset && styles.schedulePillTextActive]}>
+                    {preset}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+
             <TouchableOpacity
               style={styles.modalSubmitBtn}
               onPress={handleCreateGoal}
@@ -387,6 +469,50 @@ export default function GoalsScreen() {
 }
 
 const styles = StyleSheet.create({
+  cardMeta: {
+    fontSize: 12,
+    color: Colors.iconMuted,
+    marginTop: 4,
+  },
+  errorBanner: {
+    backgroundColor: Colors.errorLight,
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 16,
+  },
+  errorBannerText: {
+    fontSize: 13,
+    color: Colors.error,
+  },
+  scheduleLabel: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: Colors.iconDark,
+    marginBottom: 8,
+  },
+  scheduleRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginBottom: 16,
+  },
+  schedulePill: {
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 999,
+    backgroundColor: Colors.tabActiveBg,
+  },
+  schedulePillActive: {
+    backgroundColor: Colors.primary,
+  },
+  schedulePillText: {
+    fontSize: 12,
+    color: Colors.iconDark,
+  },
+  schedulePillTextActive: {
+    color: Colors.white,
+    fontWeight: '600',
+  },
   container: {
     flex: 1,
     backgroundColor: Colors.white,

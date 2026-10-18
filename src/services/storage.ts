@@ -1,5 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { ChatMessage, TaskGoalItem, AgentProfile, ChatSession, ConnectorItem } from '@/types';
+import { ChatMessage, AgentProfile, ChatSession, ConnectorItem } from '@/types';
 
 const KEYS = {
   CHAT_SESSIONS: '@muse_ai:chat_sessions',
@@ -7,8 +7,8 @@ const KEYS = {
   TASKS: '@muse_ai:tasks',
   AGENT_PROFILE: '@muse_ai:agent_profile',
   USER_AUTH: '@muse_ai:user_auth',
-  CONNECTORS: '@muse_ai:connectors',
-  GOALS: '@muse_ai:goals',
+  CONNECTORS: '@muse_ai:connectors_v2',
+  PENDING_PROMPT: '@muse_ai:pending_prompt',
 };
 
 // Global in-memory cache to guarantee zero storage latency and seamless offline/native fallback
@@ -47,25 +47,23 @@ const DEFAULT_CONNECTORS: ConnectorItem[] = [
     name: 'Gmail',
     description: 'Autonomous email triage, draft replies, and confirmation extraction',
     iconBg: '#EA4335',
-    connected: true,
+    connected: false,
     category: 'Productivity',
-    accountEmail: 'user@gmail.com',
   },
   {
     id: 'gcal',
     name: 'Google Calendar',
     description: 'Sync scheduled routines and automated event reminders',
     iconBg: '#4285F4',
-    connected: true,
+    connected: false,
     category: 'Productivity',
-    accountEmail: 'user@gmail.com',
   },
   {
     id: 'healthex',
     name: 'HealthEx',
     description: 'VO2 max, daily endurance, and marathon pacing insights',
     iconBg: '#F59E0B',
-    connected: true,
+    connected: false,
     category: 'Health',
   },
   {
@@ -73,7 +71,7 @@ const DEFAULT_CONNECTORS: ConnectorItem[] = [
     name: 'OpenTable',
     description: 'Automated dining reservations and table seat tracking',
     iconBg: '#DA3743',
-    connected: true,
+    connected: false,
     category: 'Lifestyle',
   },
   {
@@ -81,7 +79,7 @@ const DEFAULT_CONNECTORS: ConnectorItem[] = [
     name: 'Facebook',
     description: 'Marketplace alerts for deals and item tracking',
     iconBg: '#1877F2',
-    connected: true,
+    connected: false,
     category: 'Social',
   },
   {
@@ -89,7 +87,7 @@ const DEFAULT_CONNECTORS: ConnectorItem[] = [
     name: 'Instagram',
     description: 'Saved places and restaurant recommendation tracking',
     iconBg: '#E1306C',
-    connected: true,
+    connected: false,
     category: 'Social',
   },
   {
@@ -97,7 +95,7 @@ const DEFAULT_CONNECTORS: ConnectorItem[] = [
     name: 'Peloton',
     description: 'Workout cadence and daily recovery metrics',
     iconBg: '#1E2022',
-    connected: true,
+    connected: false,
     category: 'Fitness',
   },
   {
@@ -131,41 +129,6 @@ const DEFAULT_CONNECTORS: ConnectorItem[] = [
     iconBg: '#4A154B',
     connected: false,
     category: 'Workspace',
-  },
-];
-
-export interface RealGoalItem {
-  id: string;
-  title: string;
-  subtitle: string;
-  category: 'tracking' | 'goals';
-  checked: boolean;
-  replayUrl?: string;
-  isRunning?: boolean;
-}
-
-const DEFAULT_GOALS: RealGoalItem[] = [
-  {
-    id: 'track-1',
-    title: 'Dinner reservations',
-    subtitle: 'Sushi restaurants downtown with 7:30 PM availability',
-    category: 'tracking',
-    checked: false,
-    replayUrl: 'https://www.browserbase.com',
-  },
-  {
-    id: 'goal-1',
-    title: 'Marathon prep',
-    subtitle: 'Build endurance, hit pace goals, and cross that finish line strong.',
-    category: 'goals',
-    checked: false,
-  },
-  {
-    id: 'goal-2',
-    title: 'Save for new car',
-    subtitle: 'On track to hit your goals if you save $210 each month towards your car fund!',
-    category: 'goals',
-    checked: false,
   },
 ];
 
@@ -316,50 +279,15 @@ export const StorageService = {
     await safeStorage.setItem(KEYS.CONNECTORS, JSON.stringify(connectors));
   },
 
-  // Goals & Tracking
-  async getGoals(): Promise<RealGoalItem[]> {
-    try {
-      const data = await safeStorage.getItem(KEYS.GOALS);
-      if (data) {
-        return JSON.parse(data);
-      }
-      await safeStorage.setItem(KEYS.GOALS, JSON.stringify(DEFAULT_GOALS));
-      return DEFAULT_GOALS;
-    } catch {
-      return DEFAULT_GOALS;
-    }
+  // Prompt handed from another screen to the chat tab to send on open
+  async setPendingPrompt(prompt: string): Promise<void> {
+    await safeStorage.setItem(KEYS.PENDING_PROMPT, prompt);
   },
 
-  async createGoal(title: string, subtitle: string, category: 'tracking' | 'goals'): Promise<RealGoalItem> {
-    const current = await this.getGoals();
-    const newGoal: RealGoalItem = {
-      id: `goal-${Date.now()}`,
-      title,
-      subtitle,
-      category,
-      checked: false,
-    };
-    const updated = [newGoal, ...current];
-    await safeStorage.setItem(KEYS.GOALS, JSON.stringify(updated));
-    return newGoal;
-  },
-
-  async deleteGoal(id: string): Promise<RealGoalItem[]> {
-    const current = await this.getGoals();
-    const filtered = current.filter((g) => g.id !== id);
-    await safeStorage.setItem(KEYS.GOALS, JSON.stringify(filtered));
-    return filtered;
-  },
-
-  async toggleGoalCheck(id: string): Promise<RealGoalItem[]> {
-    const current = await this.getGoals();
-    const updated = current.map((g) => (g.id === id ? { ...g, checked: !g.checked } : g));
-    await safeStorage.setItem(KEYS.GOALS, JSON.stringify(updated));
-    return updated;
-  },
-
-  async saveGoals(goals: RealGoalItem[]): Promise<void> {
-    await safeStorage.setItem(KEYS.GOALS, JSON.stringify(goals));
+  async takePendingPrompt(): Promise<string | null> {
+    const prompt = await safeStorage.getItem(KEYS.PENDING_PROMPT);
+    if (prompt) await safeStorage.removeItem(KEYS.PENDING_PROMPT);
+    return prompt;
   },
 
   // Agent Profile Customization
@@ -407,8 +335,6 @@ export const StorageService = {
     } else {
       await this.saveUserAuth({
         signedIn: true,
-        name: 'User',
-        email: 'user@muse.ai',
         avatar: avatarUri || undefined,
       });
     }
