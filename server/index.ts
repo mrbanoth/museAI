@@ -10,6 +10,7 @@ import tasksRouter from './routes/tasks';
 import sessionsRouter from './routes/sessions';
 import feedRouter from './routes/feed';
 import eventsRouter from './routes/events';
+import legalRouter from './routes/legal';
 import connectorsRouter, { googleCallbackRouter } from './routes/connectors';
 import { bbClient, isBrowserbaseConfigured } from './services/browserbase';
 import { isLlmConfigured } from './services/agentEngine';
@@ -46,6 +47,9 @@ app.get('/api/health', async (_req, res) => {
     google: { configured: isGoogleConfigured() },
   });
 });
+
+// Public privacy policy (linked from Google's OAuth consent screen)
+app.use(legalRouter);
 
 // Public: Google redirects the browser here after consent
 app.use('/api/connectors/google', googleCallbackRouter);
