@@ -4,6 +4,8 @@ import { searchWeb, fetchWebPage, runCloudBrowserAutomation } from './browserbas
 import { step, emitEvent } from './events';
 import { Store } from './store';
 import { computeNextRun, isValidSchedule } from './schedule';
+import { BrowserSession, describeSnapshot } from './browserAgent';
+import { newId } from './store';
 import { isConnected, gmailSearch, gmailRead, calendarList, calendarCreate } from './google';
 
 dotenv.config();
@@ -28,7 +30,10 @@ export interface AgentResponse {
 }
 
 const MODEL = process.env.GEMINI_MODEL || 'gemini-flash-latest';
-const MAX_TOOL_ROUNDS = 6;
+const MAX_TOOL_ROUNDS = 15;
+
+/** Interactive browser sessions, one per agent turn */
+const browserSessions = new Map<string, BrowserSession>();
 
 export const isLlmConfigured = () => !!process.env.GEMINI_API_KEY;
 
@@ -83,6 +88,56 @@ const CALENDAR_TOOLS = [
       },
       required: ['summary', 'start'],
     },
+  },
+];
+
+const BROWSER_TOOLS = [
+  {
+    name: 'browser_open',
+    description:
+      'Opens a URL in an interactive cloud browser the user can watch live. Returns numbered interactive elements and visible text. Use for tasks that need clicking, typing, searching inside a site, filling forms or multi-page navigation.',
+    parameters: {
+      type: 'OBJECT',
+      properties: { url: { type: 'STRING', description: 'Full http(s) URL.' } },
+      required: ['url'],
+    },
+  },
+  {
+    name: 'browser_click',
+    description: 'Clicks an element by its number from the latest browser snapshot. Returns the new page snapshot.',
+    parameters: {
+      type: 'OBJECT',
+      properties: { element_id: { type: 'NUMBER', description: 'Element number, e.g. 12 for [12].' } },
+      required: ['element_id'],
+    },
+  },
+  {
+    name: 'browser_type',
+    description:
+      'Types text into an input/textarea (or picks an option in a select) by element number. Set press_enter to submit searches.',
+    parameters: {
+      type: 'OBJECT',
+      properties: {
+        element_id: { type: 'NUMBER', description: 'Element number.' },
+        text: { type: 'STRING', description: 'Text to type or option label to select.' },
+        press_enter: { type: 'BOOLEAN', description: 'Press Enter after typing.' },
+      },
+      required: ['element_id', 'text'],
+    },
+  },
+  {
+    name: 'browser_scroll',
+    description: 'Scrolls the page to reveal more content and elements.',
+    parameters: {
+      type: 'OBJECT',
+      properties: { direction: { type: 'STRING', description: '"down" or "up".' } },
+      required: ['direction'],
+    },
+  },
+  {
+    name: 'browser_back',
+    description: 'Goes back to the previous page.',
+    parameters: { type: 'OBJECT', properties: {} },
   },
 ];
 
@@ -147,6 +202,7 @@ const WEB_TOOLS = [
 function buildTools() {
   const declarations = [
     ...WEB_TOOLS,
+    ...(BrowserSession.isAvailable() ? BROWSER_TOOLS : []),
     ...(isConnected('gmail') ? GMAIL_TOOLS : []),
     ...(isConnected('gcal') ? CALENDAR_TOOLS : []),
   ];
@@ -167,7 +223,9 @@ const BASE_INSTRUCTION = `You are Muse AI, an autonomous AI companion that gets 
 - You may chain several tool calls: search first, then read the most relevant pages.
 - When the user asks to track, monitor or repeat something, create a scheduled task.
 - Answer concisely with short bullet points, bold key facts, and cite source URLs you actually read.
-- If a tool fails, say so plainly instead of pretending it worked.`;
+- If a tool fails, say so plainly instead of pretending it worked.
+- Interactive browser: act step by step using element numbers from the latest snapshot; re-read the snapshot after every action. Dismiss cookie/consent popups when they block the page.
+- Never enter passwords, payment details or one-time codes, and never place orders, make payments, send messages or submit irreversible forms. Stop before that final step and ask the user to confirm or finish it themselves.`;
 
 function truncate(value: any, max = 4000) {
   const s = typeof value === 'string' ? value : JSON.stringify(value);
@@ -177,7 +235,7 @@ function truncate(value: any, max = 4000) {
 /**
  * Executes a tool called by the LLM (or by the basic engine) and records it as a UI action.
  */
-async function executeTool(name: string, args: any, actions: AgentAction[], requestId?: string): Promise<any> {
+export async function executeTool(name: string, args: any, actions: AgentAction[], requestId?: string): Promise<any> {
   console.log(`[Muse Tool] ${name}(${truncate(args, 200)})`);
 
   if (name === 'browse_web_page') {
@@ -242,6 +300,44 @@ async function executeTool(name: string, args: any, actions: AgentAction[], requ
     emitEvent('task.updated', task);
     actions.push({ type: 'task_created', title: `Scheduled: ${title} (${schedule})`, details: { taskId: task.id } });
     return { created: true, taskId: task.id, schedule, nextRunAt: task.nextRunAt };
+  }
+
+  if (name.startsWith('browser_')) {
+    const key = requestId || 'default';
+    let session = browserSessions.get(key);
+    if (name === 'browser_open') {
+      if (!session) {
+        session = new BrowserSession(requestId);
+        step(requestId, 'Starting cloud browser...', { phase: 'session' });
+        await session.start();
+        browserSessions.set(key, session);
+        actions.push({
+          type: 'browser_session',
+          title: `Browser: ${args.url}`,
+          url: args.url,
+          sessionId: session.sessionId,
+          liveViewUrl: session.liveViewUrl,
+          replayUrl: session.replayUrl,
+          status: 'COMPLETED',
+        });
+      }
+      return describeSnapshot(await session.goto(String(args.url)));
+    }
+    if (!session) return { error: 'No browser open. Call browser_open first.' };
+    const snapshot =
+      name === 'browser_click'
+        ? await session.click(Number(args.element_id))
+        : name === 'browser_type'
+          ? await session.type(Number(args.element_id), String(args.text ?? ''), !!args.press_enter)
+          : name === 'browser_scroll'
+            ? await session.scroll(args.direction === 'up' ? 'up' : 'down')
+            : name === 'browser_back'
+              ? await session.back()
+              : null;
+    if (!snapshot) return { error: `Unknown tool: ${name}` };
+    const record = actions.find((a) => a.sessionId === session!.sessionId && a.type === 'browser_session');
+    if (record) record.url = snapshot.url;
+    return describeSnapshot(snapshot);
   }
 
   if (name === 'gmail_search') {
@@ -379,18 +475,26 @@ export async function processAgentChat(
   requestId?: string
 ): Promise<AgentResponse> {
   const actions: AgentAction[] = [];
+  // Every turn gets an id so its browser session can be found and closed
+  const turnId = requestId || newId('turn');
 
-  if (isLlmConfigured()) {
-    const reply = await runGemini(userMessage, history, actions, requestId);
-    const scheduled = actions.some((a) => a.type === 'task_created');
-    return {
-      reply,
-      actions,
-      engine: 'gemini',
-      suggestedTasks: actions.length && !scheduled ? ['Track this daily'] : undefined,
-    };
+  try {
+    if (isLlmConfigured()) {
+      const reply = await runGemini(userMessage, history, actions, turnId);
+      const scheduled = actions.some((a) => a.type === 'task_created');
+      return {
+        reply,
+        actions,
+        engine: 'gemini',
+        suggestedTasks: actions.length && !scheduled ? ['Track this daily'] : undefined,
+      };
+    }
+
+    const reply = await runBasic(userMessage, actions, turnId);
+    return { reply, actions, engine: 'basic' };
+  } finally {
+    const session = browserSessions.get(turnId);
+    browserSessions.delete(turnId);
+    await session?.close();
   }
-
-  const reply = await runBasic(userMessage, actions, requestId);
-  return { reply, actions, engine: 'basic' };
 }

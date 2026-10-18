@@ -204,26 +204,20 @@ export async function searchWeb(query: string, numResults = 6): Promise<{ succes
   }
 }
 
+// In-page extraction as plain JS source (tsx would inject helpers that don't exist in the browser)
+const EXTRACT_SCRIPT = String.raw`function (maxText) {
+  var clean = function (s) { return (s || '').replace(/\s+/g, ' ').trim(); };
+  var headings = Array.prototype.slice.call(document.querySelectorAll('h1, h2, h3'))
+    .map(function (h) { return clean(h.textContent); }).filter(Boolean).slice(0, 12);
+  var links = Array.prototype.slice.call(document.querySelectorAll('a[href]'))
+    .map(function (a) { return { text: clean(a.textContent), href: a.href }; })
+    .filter(function (l) { return l.text.length > 3 && /^https?:/.test(l.href); }).slice(0, 25);
+  var main = document.querySelector('main, article, [role="main"]') || document.body;
+  return { url: location.href, title: document.title, headings: headings, text: clean(main.innerText).slice(0, maxText), links: links };
+}`;
+
 async function extractFromPage(page: any): Promise<PageExtraction> {
-  return page.evaluate((maxText: number) => {
-    const clean = (s: string | null | undefined) => (s || '').replace(/\s+/g, ' ').trim();
-    const headings = Array.from(document.querySelectorAll('h1, h2, h3'))
-      .map((h) => clean(h.textContent))
-      .filter(Boolean)
-      .slice(0, 12);
-    const links = Array.from(document.querySelectorAll('a[href]'))
-      .map((a) => ({ text: clean(a.textContent), href: (a as HTMLAnchorElement).href }))
-      .filter((l) => l.text.length > 3 && /^https?:/.test(l.href))
-      .slice(0, 25);
-    const main = document.querySelector('main, article, [role="main"]') || document.body;
-    return {
-      url: location.href,
-      title: document.title,
-      headings,
-      text: clean((main as HTMLElement).innerText).slice(0, maxText),
-      links,
-    };
-  }, MAX_TEXT);
+  return page.evaluate(`(${EXTRACT_SCRIPT})(${MAX_TEXT})`);
 }
 
 /**

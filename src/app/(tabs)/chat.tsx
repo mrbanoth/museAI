@@ -63,7 +63,7 @@ const QUICK_PROMPTS = [
   {
     icon: Globe02Icon,
     title: 'Live Cloud Browser',
-    prompt: 'Open https://news.ycombinator.com in cloud browser and summarize top 3 posts',
+    prompt: 'Open github.com, search for "expo router", open the top repository and tell me its stars and latest release',
   },
   {
     icon: SparklesIcon,

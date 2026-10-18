@@ -22,7 +22,7 @@ Time needed: ~20 minutes. Do the steps in order.
    |---|---|
    | `GEMINI_API_KEY` | key from Step 1 |
    | `ALLOWED_EMAILS` | **the email you will sign in to Muse with** (only these emails can use your server) |
-   | `BROWSERBASE_API_KEY`, `BROWSERBASE_PROJECT_ID` | leave empty for now (optional, Step 6) |
+   | `BROWSERBASE_API_KEY`, `BROWSERBASE_PROJECT_ID` | leave empty for now (Step 6) |
    | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | leave empty for now (Step 5) |
 4. Tap **Apply**. The first build takes ~5–8 minutes.
 5. When it says **Live**, copy your URL at the top, e.g. `https://muse-ai-xxxx.onrender.com`.
@@ -61,11 +61,17 @@ Time needed: ~20 minutes. Do the steps in order.
 
 > In Google's testing mode, connections expire after **7 days** — just tap Connect again. Publishing the app (Google verification) removes this.
 
-## Step 6 (optional) — Real cloud browser with live view
+## Step 6 — Live cloud browser (the "super agent" part) · 3 min
 
-1. **https://www.browserbase.com** → sign up → **Settings** → copy **API key** and **Project ID**.
-2. Render → Environment → set `BROWSERBASE_API_KEY` and `BROWSERBASE_PROJECT_ID` → Save.
-   Without these, Muse still reads pages, just without the live browser video.
+This is what lets Muse **open websites, click, type, search and fill forms by itself** while you watch it live in the chat.
+
+1. **https://www.browserbase.com** → sign up (free plan is enough to try).
+2. Dashboard → **Settings / API keys** → copy the **API key** and **Project ID**.
+3. Render → **muse-ai** → **Environment** → set `BROWSERBASE_API_KEY` and `BROWSERBASE_PROJECT_ID` → **Save** (redeploys).
+4. Try in chat: *"Open github.com, search for expo router, open the top repo and tell me its stars"* — a live browser window appears in the chat and you see every click.
+
+Without these keys Muse can still read pages, but it can't click or type, and there is no live view.
+For safety Muse never types passwords or card details and stops before buying, paying or sending anything — it asks you to finish that step.
 
 ## Step 7 (recommended) — Keep scheduled tasks running
 
