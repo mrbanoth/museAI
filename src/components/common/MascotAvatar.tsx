@@ -87,6 +87,12 @@ export const MascotAvatar: React.FC<MascotAvatarProps> = ({
 
   return (
     <View style={containerStyle}>
+      {/* Static mascot underneath so there is never an empty circle while the video loads */}
+      <Image
+        source={mascotImage}
+        style={[StyleSheet.absoluteFill, { borderRadius: size / 2 }]}
+        resizeMode="cover"
+      />
       {Platform.OS === 'web' ? (
         // @ts-ignore - Web video element
         <video

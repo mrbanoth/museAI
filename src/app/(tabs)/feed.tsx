@@ -16,6 +16,7 @@ import {
   Platform,
   Linking,
   ActivityIndicator,
+  Image,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { HugeiconsIcon } from '@hugeicons/react-native';
@@ -29,9 +30,9 @@ import {
 import { Colors } from '@/constants/colors';
 import { FeedItem } from '@/types';
 import { showToast } from '@/context/ToastContext';
-import { ApiService, subscribeEvents } from '@/services/api';
+import { ApiService, serverUrl, subscribeEvents } from '@/services/api';
 import { StorageService } from '@/services/storage';
-import { LiveBrowserModal } from '@/components/common';
+import { LiveBrowserModal, MarkdownText } from '@/components/common';
 import { timeAgo } from '@/utils/time';
 
 const CATEGORIES = ['All', 'Autonomous Insight', '1-Tap Idea Execution', 'Goal Execution'];
@@ -184,8 +185,17 @@ export default function FeedScreen() {
                 {/* Headline */}
                 <Text style={styles.headlineTitle}>{item.title}</Text>
 
+                {/* Screenshot of where the agent ended up */}
+                {item.screenshotUrl ? (
+                  <TouchableOpacity
+                    activeOpacity={0.85}
+                    onPress={() => handleOpenReplay(serverUrl(item.screenshotUrl), item.title)}>
+                    <Image source={{ uri: serverUrl(item.screenshotUrl) }} style={styles.screenshot} resizeMode="cover" />
+                  </TouchableOpacity>
+                ) : null}
+
                 {/* Summary */}
-                <Text style={styles.summaryText}>{item.summary}</Text>
+                <MarkdownText text={item.summary} style={styles.summaryText} />
 
                 {/* Tags */}
                 {item.tags && item.tags.length > 0 && (
@@ -200,15 +210,15 @@ export default function FeedScreen() {
 
                 {/* Footer Actions */}
                 <View style={styles.cardFooter}>
-                  {item.replayUrl && (
+                  {item.sourceUrl ? (
                     <TouchableOpacity
                       style={styles.replayBtn}
-                      onPress={() => handleOpenReplay(item.replayUrl, item.title)}
+                      onPress={() => handleOpenReplay(item.sourceUrl, item.title)}
                       activeOpacity={0.75}>
                       <HugeiconsIcon icon={Globe02Icon} size={13} color={Colors.primary} strokeWidth={2} />
-                      <Text style={styles.replayBtnText}>Watch Cloud Replay</Text>
+                      <Text style={styles.replayBtnText}>Open page</Text>
                     </TouchableOpacity>
-                  )}
+                  ) : null}
 
                   <TouchableOpacity
                     style={styles.chatActionBtn}
@@ -236,6 +246,13 @@ export default function FeedScreen() {
 }
 
 const styles = StyleSheet.create({
+  screenshot: {
+    width: '100%',
+    height: 170,
+    borderRadius: 12,
+    marginBottom: 10,
+    backgroundColor: Colors.surface,
+  },
   container: {
     flex: 1,
     backgroundColor: Colors.white,

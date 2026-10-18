@@ -16,3 +16,4 @@ export { BrandLogoIcon, type BrandLogoIconProps } from './BrandLogoIcon';
 
 export { EmbeddedBrowser } from './EmbeddedBrowser';
 export { MarkdownText } from './MarkdownText';
+export { TypingDots } from './TypingDots';

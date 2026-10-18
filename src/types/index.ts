@@ -33,6 +33,7 @@ export interface ChatMessage {
     replayUrl?: string;
     url?: string;
     status?: 'COMPLETED' | 'FAILED';
+    screenshotUrl?: string;
     details?: any;
   }>;
 }
@@ -95,6 +96,8 @@ export interface FeedItem {
   sourceUrl?: string;
   /** Browserbase session recording URL */
   replayUrl?: string;
+  /** Final page screenshot path on the server (/shots/<id>.jpg) */
+  screenshotUrl?: string;
   /** Topic or capability tags */
   tags: string[];
   /** Icon key ('task' | 'idea') */
@@ -123,6 +126,7 @@ export interface AgentTask {
   lastStatus?: 'COMPLETED' | 'FAILED';
   lastSummary?: string;
   lastReplayUrl?: string;
+  lastScreenshotUrl?: string;
   createdAt: string;
   updatedAt: string;
 }

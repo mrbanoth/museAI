@@ -52,6 +52,7 @@ export async function runTask(taskId: string, trigger: 'manual' | 'schedule') {
       summary: result.reply,
       sourceUrl: task.url || result.actions.find((a) => a.url)?.url,
       replayUrl: browser?.replayUrl,
+      screenshotUrl: result.actions.find((a) => a.screenshotUrl)?.screenshotUrl,
       tags: [trigger === 'schedule' ? 'Scheduled' : 'Manual run', task.schedule],
       icon: 'task',
       taskId,
@@ -65,6 +66,7 @@ export async function runTask(taskId: string, trigger: 'manual' | 'schedule') {
       lastStatus: failed ? 'FAILED' : 'COMPLETED',
       lastSummary: result.reply,
       lastReplayUrl: browser?.replayUrl || task.lastReplayUrl,
+      lastScreenshotUrl: result.actions.find((a) => a.screenshotUrl)?.screenshotUrl || task.lastScreenshotUrl,
       nextRunAt: computeNextRun(task.schedule)?.toISOString(),
     });
     emitEvent('task.updated', updated);

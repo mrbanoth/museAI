@@ -17,6 +17,7 @@ import {
   Platform,
   Animated,
   Easing,
+  Image,
 } from 'react-native';
 import { HugeiconsIcon } from '@hugeicons/react-native';
 import {
@@ -35,6 +36,8 @@ export interface BrowserCardProps {
   previewType?: 'seats' | 'web';
   /** Embeddable Browserbase live view of the running session (shown instead of the target page on web) */
   liveViewUrl?: string;
+  /** Final screenshot shown after the session ended */
+  screenshotUrl?: string;
   /** True while the cloud session is still running */
   live?: boolean;
   /** Real progress step from the agent; replaces the generic ticker */
@@ -57,6 +60,7 @@ export const BrowserCard: React.FC<BrowserCardProps> = ({
   statusText = 'Selecting seats...',
   previewType = 'seats',
   liveViewUrl,
+  screenshotUrl,
   live = false,
   stepText,
   failed = false,
@@ -281,6 +285,9 @@ export const BrowserCard: React.FC<BrowserCardProps> = ({
             {liveViewUrl ? (
               // Real-time Browserbase stream (WebView on phones, iframe on web)
               <EmbeddedBrowser url={liveViewUrl} />
+            ) : screenshotUrl ? (
+              // Where the agent ended up (the live view closes with the session)
+              <Image source={{ uri: screenshotUrl }} style={styles.screenshot} resizeMode="cover" />
             ) : Platform.OS === 'web' ? (
               // @ts-ignore
               <iframe
@@ -363,13 +370,18 @@ export const BrowserCard: React.FC<BrowserCardProps> = ({
         style={styles.openBtn}
         onPress={onOpenBrowser}
         activeOpacity={0.85}>
-        <Text style={styles.openBtnText}>Open browser</Text>
+        <Text style={styles.openBtnText}>{live ? 'Watch full screen' : 'Open page'}</Text>
       </TouchableOpacity>
     </View>
   );
 };
 
 const styles = StyleSheet.create({
+  screenshot: {
+    width: '100%',
+    height: '100%',
+    backgroundColor: Colors.surface,
+  },
   container: {
     marginTop: 10,
     borderRadius: 22,

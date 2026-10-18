@@ -26,6 +26,7 @@ export interface TaskRecord {
   lastStatus?: RunStatus;
   lastSummary?: string;
   lastReplayUrl?: string;
+  lastScreenshotUrl?: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -39,6 +40,8 @@ export interface FeedRecord {
   createdAt: string;
   sourceUrl?: string;
   replayUrl?: string;
+  /** Final page screenshot from the run (/shots/<id>.jpg) */
+  screenshotUrl?: string;
   tags: string[];
   icon: string;
   taskId?: string;

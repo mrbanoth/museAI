@@ -43,11 +43,12 @@ import {
 import { Colors } from '@/constants/colors';
 import { ChatMessage } from '@/types';
 import { showToast } from '@/context/ToastContext';
-import { ApiService, newRequestId, subscribeEvents } from '@/services/api';
+import { ApiService, newRequestId, serverUrl, subscribeEvents } from '@/services/api';
 import { StorageService, onSessionsChanged } from '@/services/storage';
 import {
   LiveBrowserModal,
   MarkdownText,
+  TypingDots,
   FinanceCard,
   BrowserCard,
   CheckoutCard,
@@ -85,11 +86,15 @@ export default function ChatScreen() {
   const [isProcessing, setIsProcessing] = useState(false);
   const [showAttachMenu, setShowAttachMenu] = useState(false);
   const [pendingPrompt, setPendingPrompt] = useState<string | null>(null);
+  // True when a request has had no progress for a while (usually a sleeping free-tier server)
+  const [slowStart, setSlowStart] = useState(false);
   const [liveStep, setLiveStep] = useState<{
     requestId: string;
     text: string;
     liveViewUrl?: string;
     url?: string;
+    /** At least one progress event arrived from the server for this request */
+    seen?: boolean;
   } | null>(null);
   const [liveModal, setLiveModal] = useState<{ visible: boolean; url: string | null; title?: string }>({
     visible: false,
@@ -129,6 +134,19 @@ export default function ChatScreen() {
     scrollViewRef.current?.scrollToEnd({ animated: true });
   }, [messages, isProcessing, liveStep]);
 
+  useEffect(() => {
+    if (!isProcessing) {
+      setSlowStart(false);
+      return;
+    }
+    if (liveStep?.seen) {
+      setSlowStart(false);
+      return;
+    }
+    const timer = setTimeout(() => setSlowStart(true), 8000);
+    return () => clearTimeout(timer);
+  }, [isProcessing, liveStep?.seen]);
+
   // Live agent progress for the in-flight request
   useEffect(() => {
     return subscribeEvents((event) => {
@@ -138,6 +156,7 @@ export default function ChatScreen() {
           ? {
               ...cur,
               text: event.data.text,
+              seen: true,
               liveViewUrl: event.data.liveViewUrl || cur.liveViewUrl,
               url: event.data.url || cur.url,
             }
@@ -416,17 +435,15 @@ export default function ChatScreen() {
                                 <BrowserCard
                                   key={`browser-act-${i}`}
                                   title={act.title || 'Browser (Beta)'}
-                                  url={act.url || act.liveViewUrl || act.replayUrl}
+                                  url={act.url}
+                                  screenshotUrl={serverUrl(act.screenshotUrl)}
                                   statusText={
                                     act.status === 'FAILED' ? 'Cloud browser session failed' : 'Cloud browser session completed'
                                   }
                                   failed={act.status === 'FAILED'}
                                   previewType="web"
                                   onOpenBrowser={() =>
-                                    handleOpenLink(
-                                      act.replayUrl || act.liveViewUrl || act.url || 'https://www.browserbase.com',
-                                      act.title
-                                    )
+                                    handleOpenLink(act.url || serverUrl(act.screenshotUrl), act.title)
                                   }
                                 />
                               );
@@ -445,10 +462,23 @@ export default function ChatScreen() {
                                   </Text>
                                 </View>
 
-                                {(act.replayUrl || act.url) && (
+                                {act.type === 'search' && Array.isArray(act.details) && act.details.length > 0 && (
+                                  <View style={styles.searchResults}>
+                                    {act.details.slice(0, 3).map((r: any, j: number) => (
+                                      <TouchableOpacity key={`r-${j}`} onPress={() => handleOpenLink(r.url, r.title)} activeOpacity={0.7}>
+                                        <Text style={styles.searchResultTitle} numberOfLines={1}>{r.title}</Text>
+                                        <Text style={styles.searchResultUrl} numberOfLines={1}>
+                                          {String(r.url).replace(/^https?:\/\//, '')}
+                                        </Text>
+                                      </TouchableOpacity>
+                                    ))}
+                                  </View>
+                                )}
+
+                                {act.url ? (
                                   <TouchableOpacity
                                     style={styles.sessionLinkBtn}
-                                    onPress={() => handleOpenLink(act.replayUrl || act.url, act.title)}
+                                    onPress={() => handleOpenLink(act.url, act.title)}
                                     activeOpacity={0.7}>
                                     <HugeiconsIcon
                                       icon={PlayIcon}
@@ -457,10 +487,10 @@ export default function ChatScreen() {
                                       strokeWidth={2.4}
                                     />
                                     <Text style={styles.sessionLinkText}>
-                                      Open Browser / Replay
+                                      {act.type === 'calendar' ? 'Open in Calendar' : 'Open page'}
                                     </Text>
                                   </TouchableOpacity>
-                                )}
+                                ) : null}
                               </View>
                             );
                           })}
@@ -476,8 +506,10 @@ export default function ChatScreen() {
                 <View style={[styles.messageRow, styles.agentMessageRow]}>
                   <View style={[styles.bubble, styles.agentBubble, styles.loadingBubble]}>
                     <HugeiconsIcon icon={SparklesIcon} size={16} color={Colors.primary} strokeWidth={2} />
-                    <Text style={styles.loadingText}>{liveStep?.text || 'Muse AI is working...'}</Text>
-                    <ActivityIndicator size="small" color={Colors.primary} style={{ marginLeft: 6 }} />
+                    <Text style={styles.loadingText}>
+                      {slowStart ? 'Waking up Muse’s server… (first message can take ~40s)' : liveStep?.text || 'Thinking…'}
+                    </Text>
+                    <TypingDots />
                   </View>
                   {liveStep?.liveViewUrl && (
                     <BrowserCard
@@ -607,6 +639,19 @@ export default function ChatScreen() {
 }
 
 const styles = StyleSheet.create({
+  searchResults: {
+    marginTop: 8,
+    gap: 8,
+  },
+  searchResultTitle: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: Colors.primary,
+  },
+  searchResultUrl: {
+    fontSize: 11,
+    color: Colors.iconMuted,
+  },
   sendBtnDisabled: {
     opacity: 0.35,
   },

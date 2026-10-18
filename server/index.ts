@@ -10,6 +10,7 @@ import tasksRouter from './routes/tasks';
 import feedRouter from './routes/feed';
 import eventsRouter from './routes/events';
 import legalRouter from './routes/legal';
+import { screenshotPath } from './services/screenshots';
 import connectorsRouter, { googleCallbackRouter } from './routes/connectors';
 import { bbClient, isBrowserbaseConfigured } from './services/browserbase';
 import { isLlmConfigured } from './services/agentEngine';
@@ -45,6 +46,14 @@ app.get('/api/health', async (_req, res) => {
     browserbase: { status: bbStatus, hasApiKey: isBrowserbaseConfigured() },
     google: { configured: isGoogleConfigured() },
   });
+});
+
+// Browsing screenshots (unguessable ids; images can't carry auth headers)
+app.get('/shots/:id.jpg', (req, res) => {
+  const file = screenshotPath(String(req.params.id));
+  if (!file) return res.status(404).end();
+  res.setHeader('Cache-Control', 'private, max-age=86400');
+  res.sendFile(file);
 });
 
 // Public privacy policy (linked from Google's OAuth consent screen)

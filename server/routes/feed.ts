@@ -29,6 +29,7 @@ router.post('/run-idea', async (req: Request, res: Response) => {
       summary: result.reply,
       sourceUrl: result.actions.find((a) => a.url)?.url,
       replayUrl: browser?.replayUrl,
+      screenshotUrl: result.actions.find((a) => a.screenshotUrl)?.screenshotUrl,
       tags: ['Idea', result.engine === 'gemini' ? 'AI generated' : 'Raw results'],
       icon: 'idea',
     });

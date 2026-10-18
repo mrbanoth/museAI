@@ -1,6 +1,7 @@
 import { chromium } from 'playwright-core';
 import { bbClient, isBrowserbaseConfigured, assertPublicUrl } from './browserbase';
 import { step } from './events';
+import { capturePage } from './screenshots';
 
 /**
  * Interactive browser for the agent: one session per agent turn (keyed by requestId).
@@ -97,6 +98,11 @@ export class BrowserSession {
   private touch() {
     if (this.idleTimer) clearTimeout(this.idleTimer);
     this.idleTimer = setTimeout(() => this.close(), IDLE_CLOSE_MS);
+  }
+
+  /** Final screenshot of whatever the agent ended on */
+  async screenshot(): Promise<string | undefined> {
+    return this.page && this.browser ? capturePage(this.page) : undefined;
   }
 
   async close() {

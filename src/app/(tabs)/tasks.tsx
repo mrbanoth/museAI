@@ -32,7 +32,7 @@ import {
 } from '@hugeicons/core-free-icons';
 import { Colors } from '@/constants/colors';
 import { showToast } from '@/context/ToastContext';
-import { ApiService, subscribeEvents } from '@/services/api';
+import { ApiService, serverUrl, subscribeEvents } from '@/services/api';
 import { LiveBrowserModal } from '@/components/common';
 import { AgentTask } from '@/types';
 import { timeAgo } from '@/utils/time';
@@ -254,13 +254,13 @@ export default function GoalsScreen() {
 
             {/* Bottom Actions Row */}
             <View style={styles.cardBottomRow}>
-              {item.lastReplayUrl ? (
+              {item.lastScreenshotUrl || item.url ? (
                 <TouchableOpacity
                   style={styles.replayBadge}
-                  onPress={() => handleOpenLink(item.lastReplayUrl, item.title)}
+                  onPress={() => handleOpenLink(serverUrl(item.lastScreenshotUrl) || item.url, item.title)}
                   activeOpacity={0.7}>
                   <HugeiconsIcon icon={Globe02Icon} size={13} color={Colors.primary} strokeWidth={2.2} />
-                  <Text style={styles.replayText}>Cloud Replay</Text>
+                  <Text style={styles.replayText}>{item.lastScreenshotUrl ? 'Last result' : 'Open page'}</Text>
                 </TouchableOpacity>
               ) : null}
 

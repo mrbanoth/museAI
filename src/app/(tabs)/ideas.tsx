@@ -13,8 +13,6 @@ import {
   ScrollView,
   TouchableOpacity,
   ActivityIndicator,
-  Platform,
-  Linking,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { HugeiconsIcon } from '@hugeicons/react-native';
@@ -88,15 +86,6 @@ export default function IdeasScreen() {
     router.push('/(tabs)/chat' as any);
   };
 
-  const handleOpenReplay = (url?: string) => {
-    if (!url) return;
-    if (Platform.OS === 'web') {
-      window.open(url, '_blank');
-    } else {
-      Linking.openURL(url).catch(() => showToast(`Opening: ${url}`));
-    }
-  };
-
   return (
     <View style={styles.container}>
       <ScrollView
@@ -134,13 +123,13 @@ export default function IdeasScreen() {
                 <Text style={styles.ideaDescription}>{item.description}</Text>
 
                 {/* Replay badge if finished */}
-                {result?.replayUrl && (
+                {result && (
                   <TouchableOpacity
                     style={styles.replayBadge}
-                    onPress={() => handleOpenReplay(result.replayUrl)}
+                    onPress={() => router.push('/(tabs)/feed' as any)}
                     activeOpacity={0.7}>
                     <HugeiconsIcon icon={Globe02Icon} size={13} color={Colors.primary} strokeWidth={2} />
-                    <Text style={styles.replayBadgeText}>View Cloud Replay</Text>
+                    <Text style={styles.replayBadgeText}>View result in Feed</Text>
                   </TouchableOpacity>
                 )}
 

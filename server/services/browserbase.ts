@@ -5,6 +5,7 @@ import net from 'net';
 import dotenv from 'dotenv';
 import { Agent as UndiciAgent, fetch as undiciFetch } from 'undici';
 import { step } from './events';
+import { capturePage } from './screenshots';
 
 dotenv.config();
 
@@ -24,6 +25,8 @@ export interface BrowserSessionResult {
   liveViewUrl?: string;
   /** Browserbase dashboard page holding the session recording */
   replayUrl?: string;
+  /** Final page screenshot (/shots/<id>.jpg) */
+  screenshotUrl?: string;
   /** 'browserbase' = real cloud Chrome, 'fetch' = plain HTTP fetch fallback */
   mode: 'browserbase' | 'fetch';
   status: 'COMPLETED' | 'FAILED';
@@ -323,8 +326,9 @@ export async function runCloudBrowserAutomation(
 
       step(requestId, `Reading page: ${goal}`, { phase: 'extract', sessionId });
       const data = await extractFromPage(page);
+      const screenshotUrl = await capturePage(page);
 
-      return { sessionId, liveViewUrl, replayUrl, mode: 'browserbase', status: 'COMPLETED', data };
+      return { sessionId, liveViewUrl, replayUrl, screenshotUrl, mode: 'browserbase', status: 'COMPLETED', data };
     } catch (err: any) {
       console.warn('[Browserbase] session failed, falling back to fetch:', err.message);
       step(requestId, 'Cloud browser failed, trying direct fetch...', { phase: 'fallback' });

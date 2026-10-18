@@ -33,6 +33,9 @@ const getApiBaseUrl = () => {
 };
 
 export const API_BASE_URL = getApiBaseUrl();
+
+/** Absolute URL for a server path like /shots/<id>.jpg */
+export const serverUrl = (p?: string) => (p ? `${API_BASE_URL.replace(/\/api$/, '')}${p}` : undefined);
 const API_TOKEN = process.env.EXPO_PUBLIC_MUSE_API_TOKEN;
 
 export interface AgentActionData {
@@ -43,6 +46,7 @@ export interface AgentActionData {
   replayUrl?: string;
   url?: string;
   status?: 'COMPLETED' | 'FAILED';
+  screenshotUrl?: string;
   details?: any;
 }
 
