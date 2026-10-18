@@ -32,6 +32,7 @@ export interface ChatMessage {
     liveViewUrl?: string;
     replayUrl?: string;
     url?: string;
+    status?: 'COMPLETED' | 'FAILED';
     details?: any;
   }>;
 }
@@ -77,7 +78,7 @@ export interface IdeaItem {
 }
 
 /**
- * Autonomous intelligence feed card item.
+ * Autonomous intelligence feed card item (persisted by the backend).
  */
 export interface FeedItem {
   /** Unique feed item identifier */
@@ -86,18 +87,55 @@ export interface FeedItem {
   category: string;
   /** Bold headline title */
   title: string;
-  /** Detailed summary paragraph */
+  /** Agent-generated result text */
   summary: string;
-  /** Formatted relative timestamp (e.g. "15m ago") */
-  timestamp: string;
+  /** ISO creation time */
+  createdAt: string;
   /** Target crawled source link */
   sourceUrl?: string;
-  /** Full Browserbase cloud session replay URL */
+  /** Browserbase session recording URL */
   replayUrl?: string;
   /** Topic or capability tags */
   tags: string[];
-  /** Emoji emblem */
+  /** Icon key ('task' | 'idea') */
   icon: string;
+  /** Originating task, when produced by a scheduled task */
+  taskId?: string;
+}
+
+/**
+ * Background task persisted and scheduled by the backend agent.
+ */
+export interface AgentTask {
+  id: string;
+  title: string;
+  subtitle: string;
+  category: 'tracking' | 'goals';
+  url?: string;
+  /** e.g. "Every 6 hours", "Daily at 9:00 AM", "Weekly on Monday at 8:00", "Manual" */
+  schedule: string;
+  status: TaskStatus;
+  checked: boolean;
+  runsCount: number;
+  isRunning: boolean;
+  lastRunAt?: string;
+  nextRunAt?: string;
+  lastStatus?: 'COMPLETED' | 'FAILED';
+  lastSummary?: string;
+  lastReplayUrl?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/**
+ * Live event pushed by the backend (SSE / long-poll).
+ */
+export interface MuseEvent {
+  seq: number;
+  type: 'task.updated' | 'task.deleted' | 'task.run.started' | 'task.run.finished' | 'feed.added' | 'agent.step';
+  at: string;
+  requestId?: string;
+  data: any;
 }
 
 /**

@@ -1,259 +1,306 @@
 import { Browserbase } from '@browserbasehq/sdk';
 import { chromium } from 'playwright-core';
+import dns from 'dns/promises';
+import net from 'net';
 import dotenv from 'dotenv';
+import { step } from './events';
 
 dotenv.config();
 
 const apiKey = process.env.BROWSERBASE_API_KEY;
+const projectId = process.env.BROWSERBASE_PROJECT_ID || undefined;
 
 export const bbClient = new Browserbase({
   apiKey: apiKey || '',
 });
 
+export const isBrowserbaseConfigured = () => !!apiKey;
+
 export interface BrowserSessionResult {
-  sessionId: string;
-  liveViewUrl: string;
-  replayUrl: string;
-  status: string;
-  data?: any;
+  /** Browserbase session id; absent when the lightweight fetch path was used */
+  sessionId?: string;
+  /** Embeddable real-time view of the remote browser (only while the session is alive) */
+  liveViewUrl?: string;
+  /** Browserbase dashboard page holding the session recording */
+  replayUrl?: string;
+  /** 'browserbase' = real cloud Chrome, 'fetch' = plain HTTP fetch fallback */
+  mode: 'browserbase' | 'fetch';
+  status: 'COMPLETED' | 'FAILED';
+  error?: string;
+  data?: PageExtraction;
+}
+
+export interface PageExtraction {
+  url: string;
+  title: string;
+  headings: string[];
+  text: string;
+  links: Array<{ text: string; href: string }>;
+}
+
+const MAX_TEXT = 6000;
+
+function isPrivateIp(ip: string): boolean {
+  if (net.isIPv4(ip)) {
+    const [a, b] = ip.split('.').map(Number);
+    return (
+      a === 10 ||
+      a === 127 ||
+      a === 0 ||
+      (a === 169 && b === 254) ||
+      (a === 172 && b >= 16 && b <= 31) ||
+      (a === 192 && b === 168) ||
+      (a === 100 && b >= 64 && b <= 127)
+    );
+  }
+  const lower = ip.toLowerCase();
+  return lower === '::1' || lower.startsWith('fc') || lower.startsWith('fd') || lower.startsWith('fe80') || lower.startsWith('::ffff:127.');
 }
 
 /**
- * Creates a cloud session or local fallback session
+ * Rejects non-http(s) URLs and hosts that resolve to private/loopback addresses,
+ * so the agent cannot be used to probe the server's own network.
  */
-export async function createCloudSession(options: { projectId?: string; keepAlive?: boolean } = {}) {
+export async function assertPublicUrl(raw: string): Promise<URL> {
+  let url: URL;
   try {
-    if (apiKey) {
-      const session = await bbClient.sessions.create({
-        projectId: options.projectId,
-        keepAlive: options.keepAlive ?? false,
-      });
-
-      const liveViewUrl = `https://www.browserbase.com/sessions/${session.id}`;
-      const replayUrl = `https://www.browserbase.com/sessions/${session.id}`;
-
-      return {
-        session,
-        liveViewUrl,
-        replayUrl,
-      };
-    }
-  } catch (err: any) {
-    console.warn('⚠️ [Browserbase] Cloud session creation failed, using local fallback:', err.message);
+    url = new URL(raw);
+  } catch {
+    throw new Error(`Invalid URL: ${raw}`);
   }
+  if (url.protocol !== 'http:' && url.protocol !== 'https:') {
+    throw new Error(`Only http(s) URLs are allowed: ${raw}`);
+  }
+  const host = url.hostname.replace(/^\[|\]$/g, '');
+  if (host === 'localhost' || host.endsWith('.local') || host.endsWith('.internal')) {
+    throw new Error(`Refusing to access local host: ${host}`);
+  }
+  let addresses: string[] = [host];
+  if (!net.isIP(host)) {
+    // Unresolvable hosts can't reach the private network either; the request itself will fail later
+    addresses = await dns.lookup(host, { all: true }).then((r) => r.map((a) => a.address)).catch(() => []);
+  }
+  if (addresses.some(isPrivateIp)) {
+    throw new Error(`Refusing to access private network address: ${host}`);
+  }
+  return url;
+}
 
-  const localId = `local-${Date.now()}`;
-  return {
-    session: { id: localId },
-    liveViewUrl: 'https://news.ycombinator.com',
-    replayUrl: 'https://news.ycombinator.com',
-  };
+function htmlToText(html: string) {
+  return html
+    .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '')
+    .replace(/<style\b[^<]*(?:(?!<\/style>)<[^<]*)*<\/style>/gi, '')
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/&nbsp;/g, ' ')
+    .replace(/&amp;/g, '&')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+async function timedFetch(url: string, init: RequestInit = {}, timeoutMs = 15000) {
+  return fetch(url, {
+    ...init,
+    signal: AbortSignal.timeout(timeoutMs),
+    headers: {
+      'User-Agent':
+        'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+      ...(init.headers || {}),
+    },
+  });
 }
 
 /**
  * List recent Browserbase sessions
  */
 export async function listRecentSessions(limit = 10) {
-  try {
-    if (apiKey) {
-      const allSessions = await bbClient.sessions.list();
-      return allSessions.slice(0, limit);
-    }
-    return [];
-  } catch {
-    return [];
-  }
+  if (!apiKey) return [];
+  const allSessions = await bbClient.sessions.list();
+  return allSessions.slice(0, limit);
 }
 
 /**
- * Fetch page content (Browserbase with 100% Free universal fallback)
+ * Fetches a page as readable text (Browserbase Fetch API, falling back to a direct fetch).
  */
-export async function fetchWebPage(url: string) {
+export async function fetchWebPage(url: string): Promise<{ success: boolean; url: string; title?: string; content?: string; error?: string }> {
   try {
-    if (apiKey) {
-      const result = await bbClient.fetchAPI.create({ url });
-      if (result && result.content) {
-        return { success: true, url, content: result.content };
-      }
-    }
-  } catch {}
+    await assertPublicUrl(url);
+  } catch (e: any) {
+    return { success: false, url, error: e.message };
+  }
 
-  // 100% Free Direct Fetch Fallback
+  if (apiKey) {
+    try {
+      const result = await bbClient.fetchAPI.create({ url, format: 'markdown' });
+      if (typeof result?.content === 'string' && result.content.trim()) {
+        return { success: true, url, content: result.content.slice(0, MAX_TEXT) };
+      }
+    } catch (e: any) {
+      console.warn('[Browserbase Fetch] falling back to direct fetch:', e.message);
+    }
+  }
+
   try {
-    const res = await fetch(url, {
-      headers: {
-        'User-Agent':
-          'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-      },
-    });
+    const res = await timedFetch(url);
+    if (!res.ok) return { success: false, url, error: `HTTP ${res.status}` };
     const html = await res.text();
-    const cleanText = html
-      .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '')
-      .replace(/<style\b[^<]*(?:(?!<\/style>)<[^<]*)*<\/style>/gi, '')
-      .replace(/<[^>]+>/g, ' ')
-      .replace(/\s+/g, ' ')
-      .trim()
-      .slice(0, 4000);
-
-    return {
-      success: true,
-      url,
-      content: cleanText,
-    };
+    const title = html.match(/<title[^>]*>([^<]*)<\/title>/i)?.[1]?.trim();
+    return { success: true, url, title, content: htmlToText(html).slice(0, MAX_TEXT) };
   } catch (error: any) {
-    return {
-      success: false,
-      url,
-      error: error.message,
-    };
+    return { success: false, url, error: error.message };
   }
 }
 
+export interface SearchResult {
+  title: string;
+  url: string;
+  snippet?: string;
+  publishedDate?: string;
+}
+
 /**
- * Search the web (100% Free DuckDuckGo / Jina fallback)
+ * Web search via Browserbase Search, falling back to DuckDuckGo's HTML endpoint.
  */
-export async function searchWeb(query: string, numResults = 5) {
-  try {
-    if (apiKey) {
-      const results = await (bbClient.search as any).web({
-        query,
-        numResults,
-      });
-      if (results && results.length > 0) {
-        return { success: true, query, results };
+export async function searchWeb(query: string, numResults = 6): Promise<{ success: boolean; query: string; results: SearchResult[]; error?: string }> {
+  if (apiKey) {
+    try {
+      const res = await bbClient.search.web({ query, numResults } as any);
+      if (res?.results?.length) {
+        return {
+          success: true,
+          query,
+          results: res.results.slice(0, numResults).map((r) => ({
+            title: r.title,
+            url: r.url,
+            publishedDate: r.publishedDate,
+          })),
+        };
       }
+    } catch (e: any) {
+      console.warn('[Browserbase Search] falling back to DuckDuckGo:', e.message);
     }
-  } catch {}
+  }
 
-  // 100% Free DuckDuckGo search fallback
   try {
-    const ddgUrl = `https://api.duckduckgo.com/?q=${encodeURIComponent(query)}&format=json&no_redirect=1&no_html=1`;
-    const res = await fetch(ddgUrl);
-    const data: any = await res.json();
-
-    const results: Array<{ title: string; url: string; snippet: string }> = [];
-
-    if (data.AbstractText) {
-      results.push({
-        title: data.Heading || query,
-        url: data.AbstractURL || 'https://duckduckgo.com',
-        snippet: data.AbstractText,
-      });
+    const res = await timedFetch(`https://html.duckduckgo.com/html/?q=${encodeURIComponent(query)}`);
+    const html = await res.text();
+    const results: SearchResult[] = [];
+    const blockRe = /<a[^>]+class="result__a"[^>]+href="([^"]+)"[^>]*>([\s\S]*?)<\/a>[\s\S]*?(?:<a[^>]+class="result__snippet"[^>]*>([\s\S]*?)<\/a>)?/g;
+    let m: RegExpExecArray | null;
+    while ((m = blockRe.exec(html)) && results.length < numResults) {
+      let href = m[1].replace(/&amp;/g, '&');
+      const uddg = href.match(/[?&]uddg=([^&]+)/);
+      if (uddg) href = decodeURIComponent(uddg[1]);
+      if (href.startsWith('//')) href = `https:${href}`;
+      if (!/^https?:/.test(href) || href.includes('duckduckgo.com/y.js')) continue;
+      results.push({ title: htmlToText(m[2]), url: href, snippet: m[3] ? htmlToText(m[3]) : undefined });
     }
-
-    if (Array.isArray(data.RelatedTopics)) {
-      for (const topic of data.RelatedTopics.slice(0, numResults)) {
-        if (topic.Text && topic.FirstURL) {
-          results.push({
-            title: topic.Text.split(' - ')[0] || topic.Text.slice(0, 30),
-            url: topic.FirstURL,
-            snippet: topic.Text,
-          });
-        }
-      }
-    }
-
-    if (results.length === 0) {
-      results.push({
-        title: `Search results for ${query}`,
-        url: `https://duckduckgo.com/?q=${encodeURIComponent(query)}`,
-        snippet: `Real-time search results for ${query}`,
-      });
-    }
-
-    return {
-      success: true,
-      query,
-      results,
-    };
+    return { success: results.length > 0, query, results, error: results.length ? undefined : 'No results found' };
   } catch (error: any) {
-    return {
-      success: true,
-      query,
-      results: [
-        {
-          title: `Search for ${query}`,
-          url: `https://www.google.com/search?q=${encodeURIComponent(query)}`,
-          snippet: `Live search query for ${query}`,
-        },
-      ],
-    };
+    return { success: false, query, results: [], error: error.message };
   }
 }
 
+async function extractFromPage(page: any): Promise<PageExtraction> {
+  return page.evaluate((maxText: number) => {
+    const clean = (s: string | null | undefined) => (s || '').replace(/\s+/g, ' ').trim();
+    const headings = Array.from(document.querySelectorAll('h1, h2, h3'))
+      .map((h) => clean(h.textContent))
+      .filter(Boolean)
+      .slice(0, 12);
+    const links = Array.from(document.querySelectorAll('a[href]'))
+      .map((a) => ({ text: clean(a.textContent), href: (a as HTMLAnchorElement).href }))
+      .filter((l) => l.text.length > 3 && /^https?:/.test(l.href))
+      .slice(0, 25);
+    const main = document.querySelector('main, article, [role="main"]') || document.body;
+    return {
+      url: location.href,
+      title: document.title,
+      headings,
+      text: clean((main as HTMLElement).innerText).slice(0, maxText),
+      links,
+    };
+  }, MAX_TEXT);
+}
+
 /**
- * Runs browser automation with automatic Free fallback
+ * Opens the URL in a real Browserbase cloud Chrome session, streams progress
+ * (including the embeddable live view URL) as agent.step events, and extracts
+ * page content. Falls back to a plain fetch when Browserbase is unavailable.
  */
 export async function runCloudBrowserAutomation(
   url: string,
-  taskDescription: string,
-  actions?: (page: any) => Promise<any>
+  goal: string,
+  requestId?: string
 ): Promise<BrowserSessionResult> {
-  // If Browserbase API Key is configured, try cloud session
+  try {
+    await assertPublicUrl(url);
+  } catch (e: any) {
+    step(requestId, e.message, { phase: 'error' });
+    return { mode: 'fetch', status: 'FAILED', error: e.message };
+  }
+
   if (apiKey) {
+    let sessionId: string | undefined;
+    let liveViewUrl: string | undefined;
+    let browser: any = null;
     try {
-      const session = await bbClient.sessions.create({});
-      const sessionId = session.id;
-      const liveViewUrl = `https://www.browserbase.com/sessions/${sessionId}`;
+      step(requestId, 'Starting cloud browser...', { phase: 'session' });
+      const session = await bbClient.sessions.create({ projectId, keepAlive: false } as any);
+      sessionId = session.id;
       const replayUrl = `https://www.browserbase.com/sessions/${sessionId}`;
 
-      console.log(`🚀 [Browserbase] Cloud browser session started: ${sessionId}`);
-
-      let customData: any = null;
-      let browser: any = null;
-
       try {
-        browser = await chromium.connectOverCDP(session.connectUrl);
-        const context = browser.contexts()[0] || (await browser.newContext());
-        const page = context.pages()[0] || (await context.newPage());
-        page.setDefaultTimeout(15000);
-
-        await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 25000 });
-
-        if (actions) {
-          customData = await actions(page);
-        } else {
-          const title = await page.title().catch(() => '');
-          const heading = await page.locator('h1, h2').first().textContent().catch(() => '');
-          customData = {
-            title,
-            heading: heading?.trim() || '',
-            url: page.url(),
-          };
-        }
-
-        return {
-          sessionId,
-          liveViewUrl,
-          replayUrl,
-          status: 'COMPLETED',
-          data: customData,
-        };
-      } catch (err: any) {
-        console.warn(`⚠️ [Browserbase CDP] Falling back to lightweight fetch:`, err.message);
-      } finally {
-        if (browser) {
-          await browser.close().catch(() => {});
-        }
+        const debug = await bbClient.sessions.debug(sessionId);
+        liveViewUrl = debug.debuggerFullscreenUrl;
+      } catch (e: any) {
+        console.warn('[Browserbase] live view URL unavailable:', e.message);
       }
-    } catch (sessionErr: any) {
-      console.warn(`⚠️ [Browserbase Session] Cloud session failed:`, sessionErr.message);
+
+      step(requestId, `Navigating to ${new URL(url).hostname}...`, {
+        phase: 'navigate',
+        sessionId,
+        liveViewUrl,
+        replayUrl,
+        url,
+      });
+
+      browser = await chromium.connectOverCDP(session.connectUrl);
+      const context = browser.contexts()[0] || (await browser.newContext());
+      const page = context.pages()[0] || (await context.newPage());
+      page.setDefaultTimeout(15000);
+      await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 30000 });
+      await page.waitForLoadState('networkidle', { timeout: 5000 }).catch(() => {});
+
+      step(requestId, `Reading page: ${goal}`, { phase: 'extract', sessionId });
+      const data = await extractFromPage(page);
+
+      return { sessionId, liveViewUrl, replayUrl, mode: 'browserbase', status: 'COMPLETED', data };
+    } catch (err: any) {
+      console.warn('[Browserbase] session failed, falling back to fetch:', err.message);
+      step(requestId, 'Cloud browser failed, trying direct fetch...', { phase: 'fallback' });
+    } finally {
+      if (browser) await browser.close().catch(() => {});
     }
   }
 
-  // 100% Free Universal Fallback (Direct URL extraction)
-  const pageFetch = await fetchWebPage(url);
-  const sessionId = `free-session-${Date.now()}`;
-
+  step(requestId, `Fetching ${url}...`, { phase: 'fetch', url });
+  const page = await fetchWebPage(url);
+  if (!page.success) {
+    return { mode: 'fetch', status: 'FAILED', error: page.error };
+  }
   return {
-    sessionId,
-    liveViewUrl: url,
-    replayUrl: url,
+    mode: 'fetch',
     status: 'COMPLETED',
     data: {
       url,
-      title: url.replace(/^https?:\/\//, '').split('/')[0],
-      content: typeof pageFetch.content === 'string' ? pageFetch.content.slice(0, 500) : '',
+      title: page.title || new URL(url).hostname,
+      headings: [],
+      text: page.content || '',
+      links: [],
     },
   };
 }

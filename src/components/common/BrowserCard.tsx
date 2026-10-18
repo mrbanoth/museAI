@@ -32,6 +32,13 @@ export interface BrowserCardProps {
   url?: string;
   statusText?: string;
   previewType?: 'seats' | 'web';
+  /** Embeddable Browserbase live view of the running session (shown instead of the target page on web) */
+  liveViewUrl?: string;
+  /** True while the cloud session is still running */
+  live?: boolean;
+  /** Real progress step from the agent; replaces the generic ticker */
+  stepText?: string;
+  failed?: boolean;
   onOpenBrowser?: () => void;
 }
 
@@ -48,6 +55,10 @@ export const BrowserCard: React.FC<BrowserCardProps> = ({
   url,
   statusText = 'Selecting seats...',
   previewType = 'seats',
+  liveViewUrl,
+  live = false,
+  stepText,
+  failed = false,
   onOpenBrowser,
 }) => {
   const targetUrl = url || 'https://news.ycombinator.com';
@@ -65,6 +76,8 @@ export const BrowserCard: React.FC<BrowserCardProps> = ({
 
   // Animate human cursor across the canvas
   useEffect(() => {
+    // Only animate while a session is actually running
+    if (!live) return;
     let isMounted = true;
 
     const runHumanCursorLoop = () => {
@@ -154,7 +167,7 @@ export const BrowserCard: React.FC<BrowserCardProps> = ({
       isMounted = false;
       clearInterval(ticker);
     };
-  }, [cursorX, cursorY, cursorScale, rippleScale, rippleOpacity, previewType]);
+  }, [cursorX, cursorY, cursorScale, rippleScale, rippleOpacity, previewType, live]);
 
   const rows = ['A', 'B', 'C', 'D', 'E', 'F'];
   const cols = 9;
@@ -173,8 +186,8 @@ export const BrowserCard: React.FC<BrowserCardProps> = ({
           </Text>
         </View>
         <View style={styles.liveTag}>
-          <View style={styles.pulseDot} />
-          <Text style={styles.liveTagText}>LIVE</Text>
+          {live && <View style={styles.pulseDot} />}
+          <Text style={styles.liveTagText}>{live ? 'LIVE' : failed ? 'FAILED' : 'DONE'}</Text>
         </View>
       </View>
 
@@ -267,7 +280,7 @@ export const BrowserCard: React.FC<BrowserCardProps> = ({
             {Platform.OS === 'web' ? (
               // @ts-ignore
               <iframe
-                src={targetUrl}
+                src={liveViewUrl || targetUrl}
                 style={styles.iframe}
                 title="Browser View"
                 sandbox="allow-scripts allow-same-origin allow-forms allow-popups"
@@ -329,15 +342,17 @@ export const BrowserCard: React.FC<BrowserCardProps> = ({
       )}
 
       {/* 3. Live Action Step Ticker */}
-      <View style={styles.stepTickerRow}>
-        <HugeiconsIcon
-          icon={HUMAN_ACTIONS[currentActionIndex].icon}
-          size={14}
-          color={Colors.primary}
-          strokeWidth={2.2}
-        />
-        <Text style={styles.stepTickerText}>{HUMAN_ACTIONS[currentActionIndex].text}</Text>
-      </View>
+      {(stepText || live) && (
+        <View style={styles.stepTickerRow}>
+          <HugeiconsIcon
+            icon={stepText ? Globe02Icon : HUMAN_ACTIONS[currentActionIndex].icon}
+            size={14}
+            color={Colors.primary}
+            strokeWidth={2.2}
+          />
+          <Text style={styles.stepTickerText}>{stepText || HUMAN_ACTIONS[currentActionIndex].text}</Text>
+        </View>
+      )}
 
       {/* 4. Open Browser Action Button */}
       <TouchableOpacity

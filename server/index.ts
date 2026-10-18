@@ -1,28 +1,32 @@
-import express from 'express';
-import cors from 'cors';
 import dotenv from 'dotenv';
+dotenv.config();
+
+import express, { NextFunction, Request, Response } from 'express';
+import cors from 'cors';
 import chatRouter from './routes/chat';
 import tasksRouter from './routes/tasks';
 import sessionsRouter from './routes/sessions';
 import feedRouter from './routes/feed';
-import { bbClient } from './services/browserbase';
-
-dotenv.config();
+import eventsRouter from './routes/events';
+import { bbClient, isBrowserbaseConfigured } from './services/browserbase';
+import { isLlmConfigured } from './services/agentEngine';
+import { startScheduler } from './services/scheduler';
 
 const app = express();
-const PORT = process.env.PORT || 3001;
+const PORT = Number(process.env.PORT || 3001);
+const API_TOKEN = process.env.MUSE_API_TOKEN;
+const CORS_ORIGINS = process.env.CORS_ORIGINS?.split(',').map((s) => s.trim()).filter(Boolean);
 
-// Middleware
-app.use(cors());
-app.use(express.json());
+app.use(cors(CORS_ORIGINS?.length ? { origin: CORS_ORIGINS } : undefined));
+app.use(express.json({ limit: '1mb' }));
 
-// Health & Status check
+// Health & Status check (public)
 app.get('/api/health', async (_req, res) => {
   let bbStatus = 'UNCONFIGURED';
-  if (process.env.BROWSERBASE_API_KEY) {
+  if (isBrowserbaseConfigured()) {
     try {
-      const projects = await bbClient.projects.list();
-      bbStatus = projects.length > 0 ? 'CONNECTED' : 'KEY_VALID_NO_PROJECTS';
+      await bbClient.projects.list();
+      bbStatus = 'CONNECTED';
     } catch (e: any) {
       bbStatus = `ERROR: ${e.message}`;
     }
@@ -31,27 +35,31 @@ app.get('/api/health', async (_req, res) => {
   res.json({
     status: 'OK',
     serverTime: new Date().toISOString(),
-    browserbase: {
-      status: bbStatus,
-      hasApiKey: !!process.env.BROWSERBASE_API_KEY,
-    },
+    authRequired: !!API_TOKEN,
+    llm: { configured: isLlmConfigured(), model: process.env.GEMINI_MODEL || 'gemini-flash-latest' },
+    browserbase: { status: bbStatus, hasApiKey: isBrowserbaseConfigured() },
   });
 });
 
-// Mount Routes
+// Optional shared-secret auth so a public/LAN server can't be used to burn API credits
+app.use('/api', (req: Request, res: Response, next: NextFunction) => {
+  if (!API_TOKEN) return next();
+  const header = req.header('authorization');
+  const token = header?.startsWith('Bearer ') ? header.slice(7) : (req.query.token as string | undefined);
+  if (token === API_TOKEN) return next();
+  return res.status(401).json({ success: false, error: 'Unauthorized' });
+});
+
 app.use('/api/chat', chatRouter);
 app.use('/api/tasks', tasksRouter);
 app.use('/api/sessions', sessionsRouter);
 app.use('/api/feed', feedRouter);
+app.use('/api/events', eventsRouter);
 
-// Start server
-app.listen(Number(PORT), '0.0.0.0', () => {
-  console.log(`\n🤖 [Muse AI Backend] Server running on http://0.0.0.0:${PORT} (LAN: http://192.168.1.40:${PORT})`);
-  console.log(`🌐 [Browserbase Status] API Key configured: ${!!process.env.BROWSERBASE_API_KEY}`);
-  console.log(`📡 Endpoints available:`);
-  console.log(`   • GET  /api/health`);
-  console.log(`   • POST /api/chat`);
-  console.log(`   • GET  /api/tasks & POST /api/tasks/run`);
-  console.log(`   • GET  /api/sessions`);
-  console.log(`   • GET  /api/feed & POST /api/feed/run-idea\n`);
+app.listen(PORT, '0.0.0.0', () => {
+  console.log(`\n[Muse AI Backend] listening on http://0.0.0.0:${PORT}`);
+  console.log(`  LLM (Gemini): ${isLlmConfigured() ? 'configured' : 'NOT configured - basic mode'}`);
+  console.log(`  Browserbase:  ${isBrowserbaseConfigured() ? 'configured' : 'NOT configured - fetch fallback'}`);
+  console.log(`  Auth token:   ${API_TOKEN ? 'required' : 'disabled'}\n`);
+  startScheduler();
 });

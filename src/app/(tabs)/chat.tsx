@@ -43,7 +43,7 @@ import {
 import { Colors } from '@/constants/colors';
 import { ChatMessage } from '@/types';
 import { showToast } from '@/context/ToastContext';
-import { ApiService } from '@/services/api';
+import { ApiService, newRequestId, subscribeEvents } from '@/services/api';
 import { StorageService } from '@/services/storage';
 import {
   LiveBrowserModal,
@@ -83,6 +83,13 @@ export default function ChatScreen() {
   const [inputText, setInputText] = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
   const [showAttachMenu, setShowAttachMenu] = useState(false);
+  const [pendingPrompt, setPendingPrompt] = useState<string | null>(null);
+  const [liveStep, setLiveStep] = useState<{
+    requestId: string;
+    text: string;
+    liveViewUrl?: string;
+    url?: string;
+  } | null>(null);
   const [liveModal, setLiveModal] = useState<{ visible: boolean; url: string | null; title?: string }>({
     visible: false,
     url: null,
@@ -98,6 +105,8 @@ export default function ChatScreen() {
     setActiveSessionId(activeId);
     const sessionMessages = await StorageService.getSessionMessages(activeId);
     setMessages(sessionMessages || []);
+    const prompt = await StorageService.takePendingPrompt();
+    if (prompt) setPendingPrompt(prompt);
   }, []);
 
   useFocusEffect(
@@ -108,7 +117,24 @@ export default function ChatScreen() {
 
   useEffect(() => {
     scrollViewRef.current?.scrollToEnd({ animated: true });
-  }, [messages, isProcessing]);
+  }, [messages, isProcessing, liveStep]);
+
+  // Live agent progress for the in-flight request
+  useEffect(() => {
+    return subscribeEvents((event) => {
+      if (event.type !== 'agent.step' || !event.requestId) return;
+      setLiveStep((cur) =>
+        cur && cur.requestId === event.requestId
+          ? {
+              ...cur,
+              text: event.data.text,
+              liveViewUrl: event.data.liveViewUrl || cur.liveViewUrl,
+              url: event.data.url || cur.url,
+            }
+          : cur
+      );
+    });
+  }, []);
 
   useEffect(() => {
     const showEvent = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
@@ -154,15 +180,20 @@ export default function ChatScreen() {
     await StorageService.saveSessionMessages(activeId, updatedWithUser, newTitle);
 
     try {
-      const history = updatedWithUser.map((m) => ({ sender: m.sender, text: m.text }));
-      const res = await ApiService.sendMessage(text, history);
+      const history = messages.map((m) => ({ sender: m.sender, text: m.text }));
+      const requestId = newRequestId();
+      setLiveStep({ requestId, text: 'Thinking...' });
+      const res = await ApiService.sendMessage(text, history, requestId);
+      if (!res.success || !res.data) {
+        throw new Error(res.error || 'Agent request failed');
+      }
 
       const agentMsg: ChatMessage = {
         id: `agent-${Date.now()}`,
         sender: 'agent',
-        text: res.data?.reply || 'Task completed.',
+        text: res.data.reply,
         timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-        actions: res.data?.actions,
+        actions: res.data.actions,
       };
 
       const finalMessages = [...updatedWithUser, agentMsg];
@@ -172,7 +203,7 @@ export default function ChatScreen() {
       const errorMsg: ChatMessage = {
         id: `err-${Date.now()}`,
         sender: 'agent',
-        text: "I couldn't reach the agent backend server. Please verify the backend is running at port 3001.",
+        text: `Something went wrong: ${err.message}. Check that the agent backend is running (npm run server).`,
         timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
       };
       const finalWithErr = [...updatedWithUser, errorMsg];
@@ -181,8 +212,19 @@ export default function ChatScreen() {
       showToast('Agent connection failed');
     } finally {
       setIsProcessing(false);
+      setLiveStep(null);
     }
   };
+
+  // Send a prompt handed over from Ideas once this session's messages are loaded
+  useEffect(() => {
+    if (pendingPrompt && !isProcessing) {
+      const prompt = pendingPrompt;
+      setPendingPrompt(null);
+      handleSend(prompt);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pendingPrompt, messages]);
 
   const handleOpenLink = async (url?: string, title?: string) => {
     if (!url) return;
@@ -363,7 +405,10 @@ export default function ChatScreen() {
                                   key={`browser-act-${i}`}
                                   title={act.title || 'Browser (Beta)'}
                                   url={act.url || act.liveViewUrl || act.replayUrl}
-                                  statusText="Cloud browser session completed"
+                                  statusText={
+                                    act.status === 'FAILED' ? 'Cloud browser session failed' : 'Cloud browser session completed'
+                                  }
+                                  failed={act.status === 'FAILED'}
                                   previewType="web"
                                   onOpenBrowser={() =>
                                     handleOpenLink(
@@ -419,9 +464,21 @@ export default function ChatScreen() {
                 <View style={[styles.messageRow, styles.agentMessageRow]}>
                   <View style={[styles.bubble, styles.agentBubble, styles.loadingBubble]}>
                     <HugeiconsIcon icon={SparklesIcon} size={16} color={Colors.primary} strokeWidth={2} />
-                    <Text style={styles.loadingText}>Muse AI is reasoning and executing...</Text>
+                    <Text style={styles.loadingText}>{liveStep?.text || 'Muse AI is working...'}</Text>
                     <ActivityIndicator size="small" color={Colors.primary} style={{ marginLeft: 6 }} />
                   </View>
+                  {liveStep?.liveViewUrl && (
+                    <BrowserCard
+                      title="Cloud Browser"
+                      url={liveStep.url}
+                      liveViewUrl={liveStep.liveViewUrl}
+                      live
+                      previewType="web"
+                      statusText="Running in Browserbase"
+                      stepText={liveStep.text}
+                      onOpenBrowser={() => handleOpenLink(liveStep.liveViewUrl, 'Live Cloud Browser')}
+                    />
+                  )}
                 </View>
               )}
             </View>
@@ -467,7 +524,7 @@ export default function ChatScreen() {
             ) : (
               <TouchableOpacity
                 style={styles.circleBtn}
-                onPress={() => showToast('Voice input')}
+                onPress={() => showToast('Voice input is not available yet')}
                 activeOpacity={0.7}>
                 <HugeiconsIcon icon={Mic01Icon} size={20} color={Colors.iconDark} strokeWidth={2} />
               </TouchableOpacity>

@@ -1,8 +1,12 @@
 import { Platform } from 'react-native';
 import Constants from 'expo-constants';
+import { AgentTask, FeedItem, MuseEvent } from '@/types';
 
-// Dynamically resolve backend host IP on physical mobile devices, emulators, and web
+// Resolve the backend: explicit env var first, then the Metro host (same machine as `npm run server`)
 const getApiBaseUrl = () => {
+  const explicit = process.env.EXPO_PUBLIC_API_URL;
+  if (explicit) return explicit.replace(/\/$/, '');
+
   const hostUri =
     Constants.expoConfig?.hostUri ||
     (Constants as any).manifest2?.extra?.expoClient?.hostUri ||
@@ -15,130 +19,212 @@ const getApiBaseUrl = () => {
     }
   }
 
-  if (Platform.OS === 'web') {
-    return 'http://localhost:3001/api';
+  if (Platform.OS === 'android') {
+    // Android emulator reaches the host machine through 10.0.2.2
+    return 'http://10.0.2.2:3001/api';
   }
-
-  // Fallback to computer LAN IP
-  return 'http://192.168.1.40:3001/api';
+  return 'http://localhost:3001/api';
 };
 
-const API_BASE_URL = getApiBaseUrl();
+export const API_BASE_URL = getApiBaseUrl();
+const API_TOKEN = process.env.EXPO_PUBLIC_MUSE_API_TOKEN;
+
+export interface AgentActionData {
+  type: string;
+  title: string;
+  sessionId?: string;
+  liveViewUrl?: string;
+  replayUrl?: string;
+  url?: string;
+  status?: 'COMPLETED' | 'FAILED';
+  details?: any;
+}
 
 export interface ChatApiResponse {
   success: boolean;
-  data: {
+  error?: string;
+  data?: {
     reply: string;
-    actions: Array<{
-      type: string;
-      title: string;
-      sessionId?: string;
-      liveViewUrl?: string;
-      replayUrl?: string;
-      url?: string;
-      details?: any;
-    }>;
+    actions: AgentActionData[];
     suggestedTasks?: string[];
+    engine?: 'gemini' | 'basic';
   };
 }
 
-export interface TaskRunResponse {
-  success: boolean;
-  sessionId: string;
-  liveViewUrl: string;
-  replayUrl: string;
-  status: string;
-  message: string;
-  data?: any;
+async function request<T>(path: string, init: RequestInit = {}, timeoutMs = 20000): Promise<T> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const res = await fetch(`${API_BASE_URL}${path}`, {
+      ...init,
+      signal: controller.signal,
+      headers: {
+        'Content-Type': 'application/json',
+        ...(API_TOKEN ? { Authorization: `Bearer ${API_TOKEN}` } : {}),
+        ...(init.headers || {}),
+      },
+    });
+    const body = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      throw new Error(body?.error || `Request failed (${res.status})`);
+    }
+    return body as T;
+  } catch (err: any) {
+    if (err?.name === 'AbortError') throw new Error('The agent backend took too long to respond.');
+    throw err;
+  } finally {
+    clearTimeout(timer);
+  }
 }
+
+export const newRequestId = () => `req-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`;
 
 export const ApiService = {
   async checkHealth() {
     try {
-      const res = await fetch(`${API_BASE_URL}/health`);
-      return await res.json();
+      return await request<any>('/health', {}, 8000);
     } catch (e: any) {
-      console.warn('API Health Check failed:', e.message);
-      return { status: 'OFFLINE', browserbase: { status: 'UNKNOWN' } };
+      return { status: 'OFFLINE', error: e.message, llm: { configured: false }, browserbase: { status: 'UNKNOWN' } };
     }
   },
 
-  async sendMessage(message: string, history: Array<{ sender: string; text: string }> = []): Promise<ChatApiResponse> {
+  async sendMessage(
+    message: string,
+    history: Array<{ sender: string; text: string }> = [],
+    requestId?: string
+  ): Promise<ChatApiResponse> {
     try {
-      const res = await fetch(`${API_BASE_URL}/chat`, {
+      return await request<ChatApiResponse>(
+        '/chat',
+        { method: 'POST', body: JSON.stringify({ message, history, requestId }) },
+        180000
+      );
+    } catch (err: any) {
+      return { success: false, error: err.message };
+    }
+  },
+
+  // Tasks
+  async listTasks(): Promise<AgentTask[]> {
+    const res = await request<{ tasks: AgentTask[] }>('/tasks');
+    return res.tasks;
+  },
+
+  async createTask(input: { title: string; subtitle?: string; category?: string; url?: string; schedule?: string }) {
+    const res = await request<{ task: AgentTask }>('/tasks', { method: 'POST', body: JSON.stringify(input) });
+    return res.task;
+  },
+
+  async updateTask(id: string, patch: Partial<Pick<AgentTask, 'title' | 'subtitle' | 'schedule' | 'status' | 'checked' | 'url'>>) {
+    const res = await request<{ task: AgentTask }>(`/tasks/${id}`, { method: 'PATCH', body: JSON.stringify(patch) });
+    return res.task;
+  },
+
+  async deleteTask(id: string) {
+    await request(`/tasks/${id}`, { method: 'DELETE' });
+  },
+
+  /** Starts a run; results arrive through subscribeEvents */
+  async runTask(id: string) {
+    return request<{ success: boolean; requestId: string }>(`/tasks/${id}/run`, { method: 'POST' });
+  },
+
+  // Feed
+  async getFeed(): Promise<FeedItem[]> {
+    const res = await request<{ feed: FeedItem[] }>('/feed');
+    return res.feed;
+  },
+
+  async runIdea(idea: { id: string; title: string; prompt: string }, requestId?: string) {
+    return request<{ success: boolean; feedItem: FeedItem; replayUrl?: string; message: string }>(
+      '/feed/run-idea',
+      {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message, history }),
-      });
-      return await res.json();
-    } catch (err: any) {
-      console.warn('Send chat message failed:', err.message);
-      return {
-        success: false,
-        data: {
-          reply: `I encountered a local network error while communicating with the agent backend. (${err.message})`,
-          actions: [],
-        },
-      };
-    }
-  },
-
-  async runTask(taskId: string, taskTitle?: string, customUrl?: string): Promise<TaskRunResponse> {
-    try {
-      const res = await fetch(`${API_BASE_URL}/tasks/run`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ taskId, taskTitle, customUrl }),
-      });
-      return await res.json();
-    } catch (err: any) {
-      console.warn('Run task failed:', err.message);
-      return {
-        success: false,
-        sessionId: '',
-        liveViewUrl: '',
-        replayUrl: '',
-        status: 'FAILED',
-        message: err.message,
-      };
-    }
-  },
-
-  async getFeed(): Promise<{ success: boolean; feed: any[] }> {
-    try {
-      const res = await fetch(`${API_BASE_URL}/feed`);
-      return await res.json();
-    } catch (err: any) {
-      console.warn('Get feed failed:', err.message);
-      return { success: false, feed: [] };
-    }
-  },
-
-  async runIdea(idea: { id: string; title: string; prompt: string; icon: string }): Promise<any> {
-    try {
-      const res = await fetch(`${API_BASE_URL}/feed/run-idea`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          ideaId: idea.id,
-          title: idea.title,
-          prompt: idea.prompt,
-          icon: idea.icon,
-        }),
-      });
-      return await res.json();
-    } catch (err: any) {
-      console.warn('Run idea failed:', err.message);
-      return { success: false, message: err.message };
-    }
+        body: JSON.stringify({ ideaId: idea.id, title: idea.title, prompt: idea.prompt, requestId }),
+      },
+      180000
+    );
   },
 
   async listSessions() {
     try {
-      const res = await fetch(`${API_BASE_URL}/sessions`);
-      return await res.json();
-    } catch (err: any) {
+      return await request<any>('/sessions');
+    } catch {
       return { success: false, sessions: [] };
     }
   },
 };
+
+// ---------------------------------------------------------------------------
+// Live events: one shared connection (SSE on web, long-polling on native)
+// ---------------------------------------------------------------------------
+
+type Listener = (event: MuseEvent) => void;
+const listeners = new Set<Listener>();
+let lastSeq: number | undefined;
+let stopConnection: (() => void) | null = null;
+
+function dispatch(event: MuseEvent) {
+  lastSeq = event.seq;
+  listeners.forEach((l) => {
+    try {
+      l(event);
+    } catch (e) {
+      console.warn('Event listener error:', e);
+    }
+  });
+}
+
+function connectSse() {
+  const params = new URLSearchParams();
+  if (lastSeq !== undefined) params.set('since', String(lastSeq));
+  if (API_TOKEN) params.set('token', API_TOKEN);
+  const source = new (globalThis as any).EventSource(`${API_BASE_URL}/events/stream?${params}`);
+  source.onmessage = (msg: { data: string }) => {
+    try {
+      dispatch(JSON.parse(msg.data));
+    } catch {}
+  };
+  // EventSource reconnects automatically and resumes from Last-Event-ID
+  return () => source.close();
+}
+
+function connectLongPoll() {
+  let active = true;
+  const loop = async () => {
+    while (active) {
+      try {
+        const query = lastSeq !== undefined ? `?since=${lastSeq}` : '';
+        const res = await request<{ seq: number; events: MuseEvent[] }>(`/events${query}`, {}, 30000);
+        if (!active) break;
+        if (lastSeq === undefined) lastSeq = res.seq;
+        res.events.forEach(dispatch);
+      } catch {
+        // Backend offline: back off before retrying
+        await new Promise((r) => setTimeout(r, 4000));
+      }
+    }
+  };
+  loop();
+  return () => {
+    active = false;
+  };
+}
+
+/**
+ * Subscribe to live backend events (task runs, feed updates, agent progress steps).
+ */
+export function subscribeEvents(listener: Listener): () => void {
+  listeners.add(listener);
+  if (!stopConnection) {
+    stopConnection =
+      Platform.OS === 'web' && typeof (globalThis as any).EventSource !== 'undefined' ? connectSse() : connectLongPoll();
+  }
+  return () => {
+    listeners.delete(listener);
+    if (listeners.size === 0 && stopConnection) {
+      stopConnection();
+      stopConnection = null;
+    }
+  };
+}

@@ -53,6 +53,12 @@ export default function TabLayout() {
   React.useEffect(() => {
     (async () => {
       const { StorageService } = await import('@/services/storage');
+      // Require a real (Supabase-backed) sign-in before showing the app
+      const auth = await StorageService.getUserAuth();
+      if (!auth?.signedIn || !auth.userId) {
+        router.replace('/' as any);
+        return;
+      }
       const saved = await StorageService.getAgentProfile();
       if (saved) {
         setAgentName(saved.name);
@@ -63,7 +69,7 @@ export default function TabLayout() {
       const activeId = await StorageService.getActiveSessionId();
       setActiveSessionId(activeId);
     })();
-  }, []);
+  }, [router]);
 
   return (
     <SafeAreaView style={styles.safeArea} edges={['top', 'left', 'right']}>

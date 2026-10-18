@@ -42,6 +42,7 @@ import { SETTINGS_PLAN_DATA } from '@/constants/dummyData';
 import { ConnectorItem } from '@/types';
 import { showToast } from '@/context/ToastContext';
 import { StorageService } from '@/services/storage';
+import { SupabaseService } from '@/services/supabase';
 import { MascotAvatar, BrandLogoIcon } from '@/components/common';
 
 export default function SettingsScreen() {
@@ -101,13 +102,19 @@ export default function SettingsScreen() {
   };
 
   const handleToggleConnector = async (id: string, name: string) => {
+    const current = connectors.find((c) => c.id === id);
+    if (!current?.connected) {
+      // No OAuth integrations exist yet; don't pretend the account is linked
+      showToast(`${name} integration is coming soon`);
+      return;
+    }
     const updated = await StorageService.toggleConnector(id);
     setConnectors(updated);
-    const item = updated.find((c) => c.id === id);
-    showToast(`${item?.connected ? 'Connected' : 'Disconnected'} ${name}`);
+    showToast(`Disconnected ${name}`);
   };
 
   const handleSignOut = async () => {
+    await SupabaseService.signOut();
     await StorageService.clearUserAuth();
     showToast('Signed Out');
     router.replace('/' as any);
@@ -188,7 +195,7 @@ export default function SettingsScreen() {
           </View>
           <TouchableOpacity
             style={styles.upgradeBtn}
-            onPress={() => showToast('Upgraded to Unlimited Plan')}
+            onPress={() => showToast('Plan upgrades are coming soon')}
             activeOpacity={0.8}>
             <Text style={styles.upgradeBtnText}>Upgrade Plan</Text>
           </TouchableOpacity>
@@ -214,7 +221,7 @@ export default function SettingsScreen() {
 
           <TouchableOpacity
             style={styles.menuItem}
-            onPress={() => showToast('Pricing plans')}
+            onPress={() => showToast('Pricing is coming soon')}
             activeOpacity={0.7}>
             <View style={styles.menuIconWrap}>
               <HugeiconsIcon icon={Tag01Icon} size={20} color="#10B981" strokeWidth={2} />
@@ -231,7 +238,7 @@ export default function SettingsScreen() {
         <View style={styles.menuGroup}>
           <TouchableOpacity
             style={styles.menuItem}
-            onPress={() => showToast('Notification settings')}
+            onPress={() => showToast('Notification settings are coming soon')}
             activeOpacity={0.7}>
             <View style={styles.menuIconWrap}>
               <HugeiconsIcon icon={Notification01Icon} size={20} color="#F59E0B" strokeWidth={2} />
@@ -245,7 +252,7 @@ export default function SettingsScreen() {
 
           <TouchableOpacity
             style={styles.menuItem}
-            onPress={() => showToast('Appearance settings')}
+            onPress={() => showToast('Appearance settings are coming soon')}
             activeOpacity={0.7}>
             <View style={styles.menuIconWrap}>
               <HugeiconsIcon icon={PaintBrush01Icon} size={20} color="#8B5CF6" strokeWidth={2} />
@@ -262,7 +269,7 @@ export default function SettingsScreen() {
         <View style={styles.menuGroup}>
           <TouchableOpacity
             style={styles.menuItem}
-            onPress={() => showToast('Help Center opened')}
+            onPress={() => showToast('Help Center is coming soon')}
             activeOpacity={0.7}>
             <View style={styles.menuIconWrap}>
               <HugeiconsIcon icon={HelpCircleIcon} size={20} color="#64748B" strokeWidth={2} />
@@ -374,7 +381,7 @@ export default function SettingsScreen() {
                       style={styles.connectBtn}
                       onPress={() => handleToggleConnector(item.id, item.name)}
                       activeOpacity={0.8}>
-                      <Text style={styles.connectBtnText}>Connect</Text>
+                      <Text style={styles.connectBtnText}>Soon</Text>
                     </TouchableOpacity>
                   </View>
                 ))}

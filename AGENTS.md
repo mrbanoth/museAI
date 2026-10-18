@@ -66,11 +66,35 @@ muse_ai_clone/
 │   │       └── settings.tsx   # 5. Settings Tab: Quota card, groups, and integrated sheets
 │   ├── components/            # Core Shared UI Layout Components
 │   │   └── common/            # Header, Mascot, Drawer, Customizer & Settings Modals
-│   └── constants/
-│       ├── colors.ts          # Central color palette
-│       ├── dummyData.ts       # Initial chat & sample workflows
-│       └── theme.ts           # Spacing and typography
+│   ├── constants/
+│   │   ├── colors.ts          # Central color palette
+│   │   ├── dummyData.ts       # Idea templates & plan card data
+│   │   └── theme.ts           # Spacing and typography
+│   ├── services/
+│   │   ├── api.ts             # Backend client + live events (SSE on web, long-poll on native)
+│   │   ├── storage.ts         # Local chat sessions, profile, connectors
+│   │   └── supabase.ts        # Auth (email + Google OAuth)
+│   └── utils/time.ts          # Relative time labels
+├── server/                    # Agent backend (npm run server)
+│   ├── index.ts               # Express app, optional bearer auth, starts scheduler
+│   ├── routes/                # chat, tasks (CRUD + run), feed, sessions, events
+│   ├── services/
+│   │   ├── agentEngine.ts     # Gemini multi-step tool loop (basic mode without key)
+│   │   ├── browserbase.ts     # Cloud browser, live view, search, fetch, URL guard
+│   │   ├── scheduler.ts       # Runs due tasks every 30s, posts results to feed
+│   │   ├── schedule.ts        # "Every 6 hours" / "Daily at 9:00" parser
+│   │   ├── events.ts          # Event bus for live updates
+│   │   └── store.ts           # JSON persistence (server/data/db.json)
+│   └── data/                  # Runtime state (gitignored)
+└── supabase/schema.sql        # Per-user tables with owner-only RLS
 ```
+
+## 🔄 Real-time Architecture
+
+- **Tasks** live on the backend and run automatically on their schedule (server local time). Manual runs return `202` immediately.
+- **Progress** is pushed as events (`agent.step`, `task.updated`, `feed.added`, …) over `/api/events/stream` (SSE) or `/api/events?since=<seq>` (long-poll). Chat/idea requests pass a `requestId` so their steps can be matched.
+- **Live browser**: `agent.step` events carry the Browserbase `liveViewUrl` (`sessions.debug().debuggerFullscreenUrl`) while a session runs; `replayUrl` points to the recording.
+- **Configuration**: copy `.env.example` to `.env`. Without `GEMINI_API_KEY` the agent runs in basic mode; without `BROWSERBASE_API_KEY` pages are fetched over HTTP.
 
 ---
 
