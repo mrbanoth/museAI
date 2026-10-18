@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "muse_ai_clone",
+    "name": "Muse AI",
     "slug": "muse_ai_clone",
     "version": "1.0.0",
     "orientation": "portrait",
@@ -17,7 +17,9 @@
         "backgroundImage": "./assets/images/android-icon-background.png",
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
       },
-      "predictiveBackGestureEnabled": false
+      "predictiveBackGestureEnabled": false,
+      "package": "com.museai.app",
+      "versionCode": 1
     },
     "web": {
       "output": "single",

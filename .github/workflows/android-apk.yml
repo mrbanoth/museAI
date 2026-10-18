@@ -1,0 +1,75 @@
+# Builds an installable Android APK on GitHub (no laptop / Expo account needed)
+# and publishes it as the "Latest APK" release. Run it from the Actions tab or push to main.
+name: Android APK
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'src/**'
+      - 'assets/**'
+      - 'app.json'
+      - 'package.json'
+      - 'package-lock.json'
+      - '.github/workflows/android-apk.yml'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: android-apk
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      # Backend the app talks to (baked into the APK)
+      EXPO_PUBLIC_API_URL: https://muse-ai-r5uk.onrender.com/api
+      GRADLE_OPTS: -Dorg.gradle.jvmargs="-Xmx6g -XX:MaxMetaspaceSize=1g"
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Generate native Android project
+        run: npx expo prebuild --platform android --no-install --clean
+
+      - name: Build release APK
+        working-directory: android
+        # The Expo template signs release builds with the debug key, so the APK installs directly.
+        # arm64 only: covers practically all current phones and halves build time.
+        run: ./gradlew assembleRelease -PreactNativeArchitectures=arm64-v8a --no-daemon
+
+      - name: Rename APK
+        run: cp android/app/build/outputs/apk/release/app-release.apk muse-ai.apk
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: muse-ai-apk
+          path: muse-ai.apk
+
+      - name: Publish "Latest APK" release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release delete apk-latest --yes --cleanup-tag || true
+          gh release create apk-latest muse-ai.apk \
+            --title "Muse AI — Latest APK" \
+            --notes "Built from ${GITHUB_SHA::7}. Download muse-ai.apk below and install it on Android." \
+            --latest
