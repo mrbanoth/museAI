@@ -1,11 +1,12 @@
 import { GoogleGenAI } from '@google/genai';
 import dotenv from 'dotenv';
-import { searchWeb, fetchWebPage, runCloudBrowserAutomation } from './browserbase';
+import { searchWeb, fetchWebPage, runCloudBrowserAutomation, assertPublicUrl } from './browserbase';
 import { step, emitEvent } from './events';
-import { Store } from './store';
+
 import { computeNextRun, isValidSchedule } from './schedule';
 import { BrowserSession, describeSnapshot } from './browserAgent';
-import { newId } from './store';
+import { Store, newId, MAX_TASKS_PER_USER } from './store';
+import { currentUser } from './userContext';
 import { isConnected, gmailSearch, gmailRead, calendarList, calendarCreate } from './google';
 
 dotenv.config();
@@ -287,7 +288,22 @@ export async function executeTool(name: string, args: any, actions: AgentAction[
   }
 
   if (name === 'create_scheduled_task') {
-    const { title, instructions, url } = args;
+    // Scheduled runs act unattended: never let one (or content it reads) create more tasks
+    if (requestId?.startsWith('task:')) {
+      return { error: 'Scheduled runs cannot create new scheduled tasks.' };
+    }
+    if (Store.listTasks().length >= MAX_TASKS_PER_USER) {
+      return { error: `Task limit reached (${MAX_TASKS_PER_USER}). Ask the user to delete a task first.` };
+    }
+    const { title, instructions } = args;
+    let url: string | undefined = args.url || undefined;
+    if (url) {
+      try {
+        await assertPublicUrl(url);
+      } catch (e: any) {
+        return { error: e.message };
+      }
+    }
     const schedule = isValidSchedule(args.schedule || '') ? args.schedule : 'Daily at 9:00';
     const task = Store.createTask({
       title,
@@ -303,7 +319,8 @@ export async function executeTool(name: string, args: any, actions: AgentAction[
   }
 
   if (name.startsWith('browser_')) {
-    const key = requestId || 'default';
+    // Scoped to the caller so a reused/guessed requestId can never reach another user's browser
+    const key = `${currentUser()}:${requestId || 'default'}`;
     let session = browserSessions.get(key);
     if (name === 'browser_open') {
       if (!session) {
@@ -493,8 +510,9 @@ export async function processAgentChat(
     const reply = await runBasic(userMessage, actions, turnId);
     return { reply, actions, engine: 'basic' };
   } finally {
-    const session = browserSessions.get(turnId);
-    browserSessions.delete(turnId);
+    const key = `${currentUser()}:${turnId}`;
+    const session = browserSessions.get(key);
+    browserSessions.delete(key);
     await session?.close();
   }
 }

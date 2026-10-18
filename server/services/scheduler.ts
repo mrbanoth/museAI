@@ -3,6 +3,7 @@ import { emitEvent } from './events';
 import { processAgentChat } from './agentEngine';
 import { computeNextRun } from './schedule';
 import { runAsUser, LOCAL_USER } from './userContext';
+import { agentRunLimit } from './auth';
 
 const TICK_MS = 30_000;
 const MAX_CONCURRENT = 2;
@@ -28,6 +29,12 @@ export async function runTask(taskId: string, trigger: 'manual' | 'schedule') {
   const task = Store.getTask(taskId);
   if (!task) throw new Error('Task not found');
   if (running.has(taskId)) throw new Error('Task is already running');
+
+  // Scheduled runs spend the same paid quota as chats: count them against the owner's daily limit
+  if (trigger === 'schedule' && !agentRunLimit(task.owner || LOCAL_USER).ok) {
+    Store.updateTask(taskId, { nextRunAt: computeNextRun(task.schedule)?.toISOString() });
+    throw new Error('Daily agent run limit reached; skipping this scheduled run');
+  }
 
   running.add(taskId);
   const requestId = `task:${taskId}`;

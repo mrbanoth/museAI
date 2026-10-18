@@ -65,6 +65,8 @@ interface DbShape {
 const DATA_DIR = process.env.MUSE_DATA_DIR || path.join(__dirname, '..', 'data');
 const DB_FILE = path.join(DATA_DIR, 'db.json');
 const MAX_FEED = 200;
+/** Per-user cap on tasks: each one can run on a schedule and spend paid API quota */
+export const MAX_TASKS_PER_USER = Number(process.env.MAX_TASKS_PER_USER || 20);
 
 function load(): DbShape {
   try {

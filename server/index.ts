@@ -7,7 +7,6 @@ import fs from 'fs';
 import path from 'path';
 import chatRouter from './routes/chat';
 import tasksRouter from './routes/tasks';
-import sessionsRouter from './routes/sessions';
 import feedRouter from './routes/feed';
 import eventsRouter from './routes/events';
 import legalRouter from './routes/legal';
@@ -80,7 +79,6 @@ app.post('/api/tasks/:id/run', agentLimit);
 
 app.use('/api/chat', chatRouter);
 app.use('/api/tasks', tasksRouter);
-app.use('/api/sessions', sessionsRouter);
 app.use('/api/feed', feedRouter);
 app.use('/api/events', eventsRouter);
 app.use('/api/connectors', connectorsRouter);

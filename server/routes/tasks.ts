@@ -1,5 +1,5 @@
 import { Router, Request, Response } from 'express';
-import { Store } from '../services/store';
+import { Store, MAX_TASKS_PER_USER } from '../services/store';
 import { emitEvent } from '../services/events';
 import { runTask } from '../services/scheduler';
 import { computeNextRun, isValidSchedule } from '../services/schedule';
@@ -20,6 +20,9 @@ router.post('/', async (req: Request, res: Response) => {
   const { title, subtitle, category, url, schedule } = req.body || {};
   if (!title || typeof title !== 'string' || !title.trim()) {
     return res.status(400).json({ success: false, error: 'Field "title" is required.' });
+  }
+  if (Store.listTasks().length >= MAX_TASKS_PER_USER) {
+    return res.status(400).json({ success: false, error: `You can have at most ${MAX_TASKS_PER_USER} tasks. Delete one first.` });
   }
   const sched = typeof schedule === 'string' && schedule.trim() ? schedule.trim() : 'Manual';
   if (!isValidSchedule(sched)) {

@@ -3,6 +3,7 @@ import { chromium } from 'playwright-core';
 import dns from 'dns/promises';
 import net from 'net';
 import dotenv from 'dotenv';
+import { Agent as UndiciAgent, fetch as undiciFetch } from 'undici';
 import { step } from './events';
 
 dotenv.config();
@@ -40,22 +41,64 @@ export interface PageExtraction {
 
 const MAX_TEXT = 6000;
 
-function isPrivateIp(ip: string): boolean {
-  if (net.isIPv4(ip)) {
-    const [a, b] = ip.split('.').map(Number);
-    return (
-      a === 10 ||
-      a === 127 ||
-      a === 0 ||
-      (a === 169 && b === 254) ||
-      (a === 172 && b >= 16 && b <= 31) ||
-      (a === 192 && b === 168) ||
-      (a === 100 && b >= 64 && b <= 127)
-    );
-  }
-  const lower = ip.toLowerCase();
-  return lower === '::1' || lower.startsWith('fc') || lower.startsWith('fd') || lower.startsWith('fe80') || lower.startsWith('::ffff:127.');
+// Every non-public range: private, loopback, link-local (cloud metadata), CGNAT, benchmark, multicast, reserved
+const blocked = new net.BlockList();
+for (const [range, prefix] of [
+  ['0.0.0.0', 8], ['10.0.0.0', 8], ['100.64.0.0', 10], ['127.0.0.0', 8], ['169.254.0.0', 16],
+  ['172.16.0.0', 12], ['192.0.0.0', 24], ['192.0.2.0', 24], ['192.168.0.0', 16], ['198.18.0.0', 15],
+  ['198.51.100.0', 24], ['203.0.113.0', 24], ['224.0.0.0', 4], ['240.0.0.0', 4],
+] as const) {
+  blocked.addSubnet(range, prefix, 'ipv4');
 }
+for (const [range, prefix] of [
+  ['::', 128], ['::1', 128], ['64:ff9b::', 96], ['100::', 64], ['2001:db8::', 32],
+  ['fc00::', 7], ['fe80::', 10], ['ff00::', 8],
+] as const) {
+  blocked.addSubnet(range, prefix, 'ipv6');
+}
+
+/** IPv4-mapped / -compatible IPv6 (e.g. ::ffff:a9fe:a9fe) → the IPv4 address it reaches */
+function embeddedIpv4(ip: string): string | null {
+  const lower = ip.toLowerCase();
+  const dotted = lower.match(/^(?:::ffff:|::)(\d+\.\d+\.\d+\.\d+)$/);
+  if (dotted) return dotted[1];
+  const hex = lower.match(/^(?:::ffff:|::)([0-9a-f]{1,4}):([0-9a-f]{1,4})$/);
+  if (hex) {
+    const hi = parseInt(hex[1], 16);
+    const lo = parseInt(hex[2], 16);
+    return `${hi >> 8}.${hi & 255}.${lo >> 8}.${lo & 255}`;
+  }
+  return null;
+}
+
+export function isPrivateIp(ip: string): boolean {
+  const v4 = net.isIPv4(ip) ? ip : embeddedIpv4(ip);
+  if (v4) return blocked.check(v4, 'ipv4');
+  if (net.isIPv6(ip)) return blocked.check(ip, 'ipv6');
+  return true;
+}
+
+/**
+ * DNS lookup used for every outbound connection: refuses private addresses at connect
+ * time, so a host can't pass the URL check and then re-resolve to an internal IP.
+ */
+function guardedLookup(hostname: string, options: any, callback: (...args: any[]) => void) {
+  dns
+    .lookup(hostname, { all: true })
+    .then((addresses) => {
+      const bad = addresses.find((a) => isPrivateIp(a.address));
+      if (bad) {
+        callback(new Error(`Refusing to connect to private address ${bad.address}`));
+      } else if (options?.all) {
+        callback(null, addresses);
+      } else {
+        callback(null, addresses[0].address, addresses[0].family);
+      }
+    })
+    .catch((err) => callback(err));
+}
+
+const publicOnlyAgent = new UndiciAgent({ connect: { lookup: guardedLookup as any } });
 
 /**
  * Rejects non-http(s) URLs and hosts that resolve to private/loopback addresses,
@@ -101,25 +144,34 @@ function htmlToText(html: string) {
     .trim();
 }
 
-async function timedFetch(url: string, init: RequestInit = {}, timeoutMs = 15000) {
-  return fetch(url, {
-    ...init,
-    signal: AbortSignal.timeout(timeoutMs),
-    headers: {
-      'User-Agent':
-        'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
-      ...(init.headers || {}),
-    },
-  });
-}
+const MAX_REDIRECTS = 5;
 
 /**
- * List recent Browserbase sessions
+ * fetch for agent-chosen URLs: every redirect hop is re-validated and every connection
+ * goes through guardedLookup, so neither redirects nor DNS rebinding reach internal hosts.
  */
-export async function listRecentSessions(limit = 10) {
-  if (!apiKey) return [];
-  const allSessions = await bbClient.sessions.list();
-  return allSessions.slice(0, limit);
+async function timedFetch(url: string, init: { headers?: Record<string, string> } = {}, timeoutMs = 15000) {
+  let current = url;
+  for (let hop = 0; hop <= MAX_REDIRECTS; hop++) {
+    await assertPublicUrl(current);
+    const res = await undiciFetch(current, {
+      headers: {
+        'User-Agent':
+          'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+        ...(init.headers || {}),
+      },
+      redirect: 'manual',
+      dispatcher: publicOnlyAgent,
+      signal: AbortSignal.timeout(timeoutMs),
+    });
+    const location = res.headers.get('location');
+    if (res.status >= 300 && res.status < 400 && location) {
+      current = new URL(location, current).toString();
+      continue;
+    }
+    return res;
+  }
+  throw new Error('Too many redirects');
 }
 
 /**

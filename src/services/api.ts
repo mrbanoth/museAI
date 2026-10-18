@@ -202,13 +202,6 @@ export const ApiService = {
     await request(`/connectors/${id}`, { method: 'DELETE' });
   },
 
-  async listSessions() {
-    try {
-      return await request<any>('/sessions');
-    } catch {
-      return { success: false, sessions: [] };
-    }
-  },
 };
 
 // ---------------------------------------------------------------------------
