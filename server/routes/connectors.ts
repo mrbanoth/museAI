@@ -7,6 +7,7 @@ import {
   isGoogleService,
 } from '../services/google';
 import { emitEvent } from '../services/events';
+import { runAsUser } from '../services/userContext';
 
 const router = Router();
 
@@ -60,7 +61,7 @@ googleCallbackRouter.get('/callback', async (req: Request, res: Response) => {
   }
   try {
     const result = await handleCallback(code, state);
-    emitEvent('connector.updated', { id: result.service, connected: true, email: result.email });
+    runAsUser(result.owner, () => emitEvent('connector.updated', { id: result.service, connected: true, email: result.email }));
     if (result.returnTo) {
       const back = new URL(result.returnTo);
       back.searchParams.set('connector', result.service);

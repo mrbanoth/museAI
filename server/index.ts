@@ -14,7 +14,8 @@ import connectorsRouter, { googleCallbackRouter } from './routes/connectors';
 import { bbClient, isBrowserbaseConfigured } from './services/browserbase';
 import { isLlmConfigured } from './services/agentEngine';
 import { startScheduler } from './services/scheduler';
-import { requireAuth, isAuthEnabled } from './services/auth';
+import { requireAuth, isAuthEnabled, limitAgentRuns } from './services/auth';
+import { currentUser } from './services/userContext';
 import { isGoogleConfigured } from './services/google';
 
 const app = express();
@@ -51,6 +52,12 @@ app.use('/api/connectors/google', googleCallbackRouter);
 
 // Everything below requires a verified user (see services/auth.ts)
 app.use('/api', requireAuth);
+
+// Agent runs cost money: cap them per user per day (DAILY_AGENT_LIMIT, default 100)
+const agentLimit = limitAgentRuns(currentUser);
+app.post('/api/chat', agentLimit);
+app.post('/api/feed/run-idea', agentLimit);
+app.post('/api/tasks/:id/run', agentLimit);
 
 app.use('/api/chat', chatRouter);
 app.use('/api/tasks', tasksRouter);

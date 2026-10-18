@@ -85,7 +85,9 @@ muse_ai_clone/
 │   │   ├── google.ts          # Gmail + Calendar OAuth, token refresh, REST helpers
 │   │   ├── scheduler.ts       # Runs due tasks every 30s, posts results to feed
 │   │   ├── schedule.ts        # "Every 6 hours" / "Daily at 9:00" parser
-│   │   ├── events.ts          # Event bus for live updates
+│   │   ├── events.ts          # Event bus for live updates (per-user)
+│   │   ├── auth.ts            # Supabase token check, allowed-email rules, daily limit
+│   │   ├── userContext.ts     # Current user for the request / background run
 │   │   └── store.ts           # JSON persistence (server/data/db.json)
 │   └── data/                  # Runtime state (gitignored)
 └── supabase/schema.sql        # Per-user tables with owner-only RLS
@@ -99,7 +101,7 @@ muse_ai_clone/
 - **Interactive browser**: with Browserbase configured the agent gets `browser_open/click/type/scroll/back`; one session per agent turn (closed in `processAgentChat`), elements addressed by `data-muse-id` numbers. In-page scripts are plain JS strings because tsx injects `__name` helpers into named functions. `LOCAL_CHROMIUM_PATH` enables a local headless Chrome for development.
 - **Connectors**: Gmail (read-only) and Google Calendar use server-side OAuth (`/api/connectors/:id/connect` → Google → public `/api/connectors/google/callback`). Tokens are stored in `server/data/db.json` (mode 600). The agent only gets Gmail/Calendar tools while that account is connected. Other connectors are placeholders.
 - **Deploy**: `render.yaml` runs one Render web service (`npm run build` → `npm run start:prod`) serving API + web app from `dist/`. Phone-only setup steps: `SETUP.md`.
-- **API auth**: `server/services/auth.ts` verifies the Supabase session token; only `ALLOWED_EMAILS` may call `/api` (health and the OAuth callback stay public).
+- **API auth & multi-user**: `server/services/auth.ts` verifies the Supabase session token against `ALLOWED_EMAILS` rules (`you@x.com`, `@gmail.com`, `*`) and runs the request as that user via `userContext.ts` (AsyncLocalStorage). Store, events, Google connections and scheduled runs are all scoped to `currentUser()`. Agent runs are capped per user per day (`DAILY_AGENT_LIMIT`). Health and the OAuth callback stay public.
 - **Configuration**: copy `.env.example` to `.env`. Without `GEMINI_API_KEY` the agent runs in basic mode; without `BROWSERBASE_API_KEY` pages are fetched over HTTP.
 
 ---

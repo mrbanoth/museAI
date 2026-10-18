@@ -1,6 +1,7 @@
 import crypto from 'crypto';
 import dotenv from 'dotenv';
 import { Store, ConnectionRecord } from './store';
+import { currentUser, runAsUser } from './userContext';
 
 dotenv.config();
 
@@ -58,7 +59,7 @@ export function connectionStatus() {
 // OAuth flow
 // ---------------------------------------------------------------------------
 
-const pendingStates = new Map<string, { service: GoogleService; returnTo?: string; createdAt: number }>();
+const pendingStates = new Map<string, { service: GoogleService; owner: string; returnTo?: string; createdAt: number }>();
 
 /**
  * Only redirect back to the app itself: its deep-link scheme, Expo Go, or an allowed web origin.
@@ -91,6 +92,8 @@ export function buildAuthUrl(service: GoogleService, returnTo?: string) {
   const state = crypto.randomBytes(24).toString('hex');
   pendingStates.set(state, {
     service,
+    // The callback is unauthenticated, so remember whose account is being linked
+    owner: currentUser(),
     returnTo: isAllowedReturnUrl(returnTo) ? returnTo : undefined,
     createdAt: now,
   });
@@ -134,32 +137,34 @@ export async function handleCallback(code: string, state: string) {
     throw new Error('This sign-in link expired. Please try connecting again.');
   }
 
-  const tokens = await tokenRequest({ code, grant_type: 'authorization_code', redirect_uri: redirectUri() });
-  const granted = tokens.scope.split(' ');
-  const missing = SERVICES[pending.service].scopes.filter((s) => !granted.includes(s));
-  if (missing.length) {
-    throw new Error(`${SERVICES[pending.service].name} access was not granted. Please allow all requested permissions.`);
-  }
+  return runAsUser(pending.owner, async () => {
+    const tokens = await tokenRequest({ code, grant_type: 'authorization_code', redirect_uri: redirectUri() });
+    const granted = tokens.scope.split(' ');
+    const missing = SERVICES[pending.service].scopes.filter((s) => !granted.includes(s));
+    if (missing.length) {
+      throw new Error(`${SERVICES[pending.service].name} access was not granted. Please allow all requested permissions.`);
+    }
 
-  let email: string | undefined;
-  try {
-    const info = await fetch('https://openidconnect.googleapis.com/v1/userinfo', {
-      headers: { Authorization: `Bearer ${tokens.access_token}` },
-    });
-    email = ((await info.json()) as any).email;
-  } catch {}
+    let email: string | undefined;
+    try {
+      const info = await fetch('https://openidconnect.googleapis.com/v1/userinfo', {
+        headers: { Authorization: `Bearer ${tokens.access_token}` },
+      });
+      email = ((await info.json()) as any).email;
+    } catch {}
 
-  const record: ConnectionRecord = {
-    id: pending.service,
-    email,
-    scopes: granted,
-    accessToken: tokens.access_token,
-    refreshToken: tokens.refresh_token || Store.getConnection(pending.service)?.refreshToken,
-    expiresAt: Date.now() + tokens.expires_in * 1000,
-    connectedAt: new Date().toISOString(),
-  };
-  Store.saveConnection(record);
-  return { service: pending.service, name: SERVICES[pending.service].name, email, returnTo: pending.returnTo };
+    const record: ConnectionRecord = {
+      id: pending.service,
+      email,
+      scopes: granted,
+      accessToken: tokens.access_token,
+      refreshToken: tokens.refresh_token || Store.getConnection(pending.service)?.refreshToken,
+      expiresAt: Date.now() + tokens.expires_in * 1000,
+      connectedAt: new Date().toISOString(),
+    };
+    Store.saveConnection(record);
+    return { service: pending.service, owner: pending.owner, name: SERVICES[pending.service].name, email, returnTo: pending.returnTo };
+  });
 }
 
 export async function disconnect(service: GoogleService) {

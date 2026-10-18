@@ -2,6 +2,7 @@ import { Store, TaskRecord } from './store';
 import { emitEvent } from './events';
 import { processAgentChat } from './agentEngine';
 import { computeNextRun } from './schedule';
+import { runAsUser, LOCAL_USER } from './userContext';
 
 const TICK_MS = 30_000;
 const MAX_CONCURRENT = 2;
@@ -80,26 +81,26 @@ export async function runTask(taskId: string, trigger: 'manual' | 'schedule') {
 
 function tick() {
   const now = Date.now();
-  const due = Store.listTasks().filter(
+  const due = Store.listAllTasks().filter(
     (t) => t.status === 'active' && t.nextRunAt && Date.parse(t.nextRunAt) <= now && !running.has(t.id)
   );
   for (const task of due) {
     if (running.size >= MAX_CONCURRENT) break;
     console.log(`[Scheduler] Running "${task.title}" (${task.schedule})`);
-    runTask(task.id, 'schedule').catch((e) => console.warn(`[Scheduler] "${task.title}" failed:`, e.message));
+    runAsUser(task.owner || LOCAL_USER, () => runTask(task.id, 'schedule')).catch((e) => console.warn(`[Scheduler] "${task.title}" failed:`, e.message));
   }
 }
 
 export function startScheduler() {
   // Recover from a crash mid-run and fill in missing next-run times
-  for (const task of Store.listTasks()) {
+  for (const task of Store.listAllTasks()) {
     const patch: Partial<TaskRecord> = {};
     if (task.isRunning) patch.isRunning = false;
     if (task.status === 'active' && !task.nextRunAt) {
       const next = computeNextRun(task.schedule);
       if (next) patch.nextRunAt = next.toISOString();
     }
-    if (Object.keys(patch).length) Store.updateTask(task.id, patch);
+    if (Object.keys(patch).length) runAsUser(task.owner || LOCAL_USER, () => Store.updateTask(task.id, patch));
   }
   setInterval(tick, TICK_MS);
   setTimeout(tick, 2000);

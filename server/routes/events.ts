@@ -1,5 +1,6 @@
 import { Router, Request, Response } from 'express';
 import { onEvent, eventsSince, currentSeq } from '../services/events';
+import { currentUser } from '../services/userContext';
 
 const router = Router();
 
@@ -14,12 +15,15 @@ router.get('/stream', (req: Request, res: Response) => {
     'X-Accel-Buffering': 'no',
   });
 
+  const me = currentUser();
   const since = Number(req.query.since || req.header('Last-Event-ID') || currentSeq());
-  for (const e of eventsSince(since)) {
+  for (const e of eventsSince(since, me)) {
     res.write(`id: ${e.seq}\ndata: ${JSON.stringify(e)}\n\n`);
   }
 
-  const off = onEvent((e) => res.write(`id: ${e.seq}\ndata: ${JSON.stringify(e)}\n\n`));
+  const off = onEvent((e) => {
+    if (e.owner === me) res.write(`id: ${e.seq}\ndata: ${JSON.stringify(e)}\n\n`);
+  });
   const ping = setInterval(() => res.write(': ping\n\n'), 20000);
 
   req.on('close', () => {
@@ -33,8 +37,9 @@ router.get('/stream', (req: Request, res: Response) => {
  * Returns immediately when events newer than `since` exist, otherwise waits up to 25s.
  */
 router.get('/', (req: Request, res: Response) => {
+  const me = currentUser();
   const since = req.query.since !== undefined ? Number(req.query.since) : currentSeq();
-  const pending = eventsSince(since);
+  const pending = eventsSince(since, me);
   if (pending.length > 0) {
     return res.json({ seq: currentSeq(), events: pending });
   }
@@ -45,9 +50,11 @@ router.get('/', (req: Request, res: Response) => {
     done = true;
     off();
     clearTimeout(timer);
-    res.json({ seq: currentSeq(), events: eventsSince(since) });
+    res.json({ seq: currentSeq(), events: eventsSince(since, me) });
   };
-  const off = onEvent(() => setTimeout(finish, 50));
+  const off = onEvent((e) => {
+    if (e.owner === me) setTimeout(finish, 50);
+  });
   const timer = setTimeout(finish, 25000);
   req.on('close', () => {
     done = true;

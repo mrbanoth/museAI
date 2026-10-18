@@ -1,5 +1,6 @@
 import fs from 'fs';
 import path from 'path';
+import { currentUser, LOCAL_USER } from './userContext';
 
 export type TaskCategory = 'tracking' | 'goals';
 export type TaskStatus = 'active' | 'paused' | 'done';
@@ -7,6 +8,8 @@ export type RunStatus = 'COMPLETED' | 'FAILED';
 
 export interface TaskRecord {
   id: string;
+  /** Email of the user who owns this task */
+  owner: string;
   title: string;
   subtitle: string;
   category: TaskCategory;
@@ -29,6 +32,7 @@ export interface TaskRecord {
 
 export interface FeedRecord {
   id: string;
+  owner: string;
   category: string;
   title: string;
   summary: string;
@@ -95,19 +99,33 @@ export function newId(prefix: string) {
   return `${prefix}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`;
 }
 
+// Records created before multi-user support belong to the local user
+const ownerOf = (r: { owner?: string }) => r.owner || LOCAL_USER;
+const mine = (r: { owner?: string }) => ownerOf(r) === currentUser();
+const connectionKey = (service: string) => `${currentUser()}:${service}`;
+
+/**
+ * All reads/writes are scoped to currentUser(); the scheduler uses listAllTasks()
+ * and runs each task as its owner.
+ */
 export const Store = {
   listTasks(): TaskRecord[] {
+    return db.tasks.filter(mine);
+  },
+
+  listAllTasks(): TaskRecord[] {
     return db.tasks;
   },
 
   getTask(id: string): TaskRecord | undefined {
-    return db.tasks.find((t) => t.id === id);
+    return db.tasks.find((t) => t.id === id && mine(t));
   },
 
   createTask(input: Partial<TaskRecord> & { title: string }): TaskRecord {
     const now = new Date().toISOString();
     const task: TaskRecord = {
       id: newId('task'),
+      owner: currentUser(),
       title: input.title,
       subtitle: input.subtitle || '',
       category: input.category === 'goals' ? 'goals' : 'tracking',
@@ -127,44 +145,51 @@ export const Store = {
   },
 
   updateTask(id: string, patch: Partial<TaskRecord>): TaskRecord | undefined {
-    const task = db.tasks.find((t) => t.id === id);
+    const task = this.getTask(id);
     if (!task) return undefined;
-    Object.assign(task, patch, { id: task.id, updatedAt: new Date().toISOString() });
+    Object.assign(task, patch, { id: task.id, owner: ownerOf(task), updatedAt: new Date().toISOString() });
     persist();
     return task;
   },
 
   deleteTask(id: string): boolean {
-    const before = db.tasks.length;
-    db.tasks = db.tasks.filter((t) => t.id !== id);
+    const task = this.getTask(id);
+    if (!task) return false;
+    db.tasks = db.tasks.filter((t) => t !== task);
     persist();
-    return db.tasks.length !== before;
+    return true;
   },
 
   listFeed(): FeedRecord[] {
-    return db.feed;
+    return db.feed.filter(mine);
   },
 
-  addFeed(item: Omit<FeedRecord, 'id' | 'createdAt'>): FeedRecord {
-    const record: FeedRecord = { ...item, id: newId('feed'), createdAt: new Date().toISOString() };
+  addFeed(item: Omit<FeedRecord, 'id' | 'createdAt' | 'owner'>): FeedRecord {
+    const record: FeedRecord = { ...item, id: newId('feed'), owner: currentUser(), createdAt: new Date().toISOString() };
     db.feed.unshift(record);
-    if (db.feed.length > MAX_FEED) db.feed.length = MAX_FEED;
+    // Cap per user so one busy account can't push out everyone else's history
+    const userItems = db.feed.filter(mine);
+    if (userItems.length > MAX_FEED) {
+      const drop = new Set(userItems.slice(MAX_FEED));
+      db.feed = db.feed.filter((f) => !drop.has(f));
+    }
     persist();
     return record;
   },
 
-  getConnection(id: string): ConnectionRecord | undefined {
-    return db.connections[id];
+  getConnection(service: string): ConnectionRecord | undefined {
+    return db.connections[connectionKey(service)];
   },
 
   saveConnection(record: ConnectionRecord) {
-    db.connections[record.id] = record;
+    db.connections[connectionKey(record.id)] = record;
     persist();
   },
 
-  deleteConnection(id: string): boolean {
-    const existed = !!db.connections[id];
-    delete db.connections[id];
+  deleteConnection(service: string): boolean {
+    const key = connectionKey(service);
+    const existed = !!db.connections[key];
+    delete db.connections[key];
     persist();
     return existed;
   },

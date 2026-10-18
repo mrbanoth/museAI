@@ -21,7 +21,7 @@ services:
         sync: false
       - key: GOOGLE_CLIENT_SECRET
         sync: false
-      # Comma-separated Supabase login emails allowed to use this server (required: keeps strangers out)
+      # Who may sign in: you@gmail.com (only you), @gmail.com (any Gmail), * (anyone). Required.
       - key: ALLOWED_EMAILS
         sync: false
       # Server clock: task schedules like "Daily at 9:00" use this timezone

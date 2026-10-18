@@ -1,4 +1,5 @@
 import { EventEmitter } from 'events';
+import { currentUser } from './userContext';
 
 export type MuseEventType =
   | 'task.updated'
@@ -13,6 +14,8 @@ export interface MuseEvent {
   seq: number;
   type: MuseEventType;
   at: string;
+  /** User the event belongs to; only that user's streams receive it */
+  owner: string;
   /** Correlates agent.step events with the request that produced them */
   requestId?: string;
   data: any;
@@ -26,7 +29,7 @@ const recent: MuseEvent[] = [];
 let seq = 0;
 
 export function emitEvent(type: MuseEventType, data: any, requestId?: string) {
-  const event: MuseEvent = { seq: ++seq, type, at: new Date().toISOString(), requestId, data };
+  const event: MuseEvent = { seq: ++seq, type, at: new Date().toISOString(), owner: currentUser(), requestId, data };
   recent.push(event);
   if (recent.length > RECENT_LIMIT) recent.shift();
   bus.emit('event', event);
@@ -38,8 +41,8 @@ export function onEvent(listener: (e: MuseEvent) => void) {
   return () => bus.off('event', listener);
 }
 
-export function eventsSince(since: number): MuseEvent[] {
-  return recent.filter((e) => e.seq > since);
+export function eventsSince(since: number, owner: string): MuseEvent[] {
+  return recent.filter((e) => e.seq > since && e.owner === owner);
 }
 
 export function currentSeq() {
