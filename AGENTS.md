@@ -63,6 +63,7 @@ muse_ai_clone/
 │   │       ├── feed.tsx       # 2. Feed Tab: Minimalist autonomous intelligence feed
 │   │       ├── ideas.tsx      # 3. Ideas Tab: 1-tap pre-built automation templates
 │   │       ├── tasks.tsx      # 4. Tasks Tab: Scheduled goals & recurring routine manager
+│   │       ├── library.tsx    # Library: screenshots & sources from the feed (sidebar on wide screens)
 │   │       └── settings.tsx   # 5. Settings Tab: Quota card, groups, and integrated sheets
 │   ├── components/            # Core Shared UI Layout Components
 │   │   └── common/            # Header, Mascot, Drawer, Customizer & Settings Modals
@@ -102,6 +103,7 @@ muse_ai_clone/
 - **Interactive browser**: with Browserbase configured the agent gets `browser_open/click/type/scroll/back`; one session per agent turn (closed in `processAgentChat`), elements addressed by `data-muse-id` numbers. In-page scripts are plain JS strings because tsx injects `__name` helpers into named functions. `LOCAL_CHROMIUM_PATH` enables a local headless Chrome for development.
 - **Screenshots**: browsing sessions end with a JPEG of the final page (`capturePage`), attached to actions, feed items and tasks as `screenshotUrl`; clients resolve it with `serverUrl()`. Browserbase replay links need a Browserbase login, so the app shows screenshots instead.
 - **Connectors**: Gmail (read-only) and Google Calendar use server-side OAuth (`/api/connectors/:id/connect` → Google → public `/api/connectors/google/callback`). Tokens are stored in `server/data/db.json` (mode 600). The agent only gets Gmail/Calendar tools while that account is connected. Other connectors are placeholders.
+- **Web portal layout**: at ≥900px wide `(tabs)/_layout.tsx` shows `DesktopSidebar` (nav, side chats, settings/search/new chat, collapsible to an icon rail), hides the bottom tab bar and centers content at 880px. Phones keep the bottom tabs + `SidebarDrawer`.
 - **Deploy**: `render.yaml` runs one Render web service (`npm run build` → `npm run start:prod`) serving API + web app from `dist/`. Phone-only setup steps: `SETUP.md`.
 - **API auth & multi-user**: `server/services/auth.ts` verifies the Supabase session token against `ALLOWED_EMAILS` rules (`you@x.com`, `@gmail.com`, `*`) and runs the request as that user via `userContext.ts` (AsyncLocalStorage). Store, events, Google connections and scheduled runs are all scoped to `currentUser()`. Agent runs are capped per user per day (`DAILY_AGENT_LIMIT`). Health and the OAuth callback stay public.
 - **Configuration**: copy `.env.example` to `.env`. Without `GEMINI_API_KEY` the agent runs in basic mode; without `BROWSERBASE_API_KEY` pages are fetched over HTTP.

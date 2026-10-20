@@ -2,7 +2,7 @@
   "expo": {
     "name": "Muse AI",
     "slug": "muse_ai_clone",
-    "version": "1.1.0",
+    "version": "1.2.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "museaiclone",
@@ -19,7 +19,7 @@
       },
       "predictiveBackGestureEnabled": false,
       "package": "com.museai.app",
-      "versionCode": 2
+      "versionCode": 3
     },
     "web": {
       "output": "single",

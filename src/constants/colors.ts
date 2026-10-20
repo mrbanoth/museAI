@@ -5,6 +5,10 @@
  */
 
 export const Colors = {
+  // Muse mascot cream (app icon / splash / sign-in background)
+  museCream: '#FDF3EA',
+  museCreamDeep: '#F6E4D8',
+
   // Brand Primary (Blue)
   primary: '#2563EB',        // Main brand blue
   primaryDark: '#1D4ED8',    // Pressed/Hover state

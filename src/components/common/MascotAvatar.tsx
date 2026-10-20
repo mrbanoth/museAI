@@ -8,8 +8,9 @@
  * - Instant fallback to high-res static poster
  */
 
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { View, Image, StyleSheet, Platform, StyleProp, ViewStyle } from 'react-native';
+import { Colors } from '@/constants/colors';
 
 export interface MascotAvatarProps {
   /** Avatar diameter in pixels (defaults to 54) */
@@ -21,10 +22,13 @@ export interface MascotAvatarProps {
 }
 
 const mascotVideo = require('../../../assets/videos/muse_mascot_animated.mp4');
-const mascotImage = require('../../../assets/images/muse_mascot.png');
+// Round, edge-cleaned still (the original artwork has black corners outside its circle)
+const mascotImage = require('../../../assets/images/muse_mascot_round.png');
 
 // Native Video Subcomponent using expo-video
 const NativeVideoAvatar: React.FC<{ size: number }> = ({ size }) => {
+  // Hidden until the first frame plays, so the still mascot shows instead of a black circle
+  const [playing, setPlaying] = useState(false);
   try {
     const { useVideoPlayer, VideoView } = require('expo-video');
     const player = useVideoPlayer(mascotVideo, (p: any) => {
@@ -33,6 +37,14 @@ const NativeVideoAvatar: React.FC<{ size: number }> = ({ size }) => {
       p.play();
     });
 
+    // eslint-disable-next-line react-hooks/rules-of-hooks
+    useEffect(() => {
+      const sub = player.addListener('playingChange', (e: { isPlaying: boolean }) => {
+        if (e.isPlaying) setPlaying(true);
+      });
+      return () => sub.remove();
+    }, [player]);
+
     return (
       <VideoView
         player={player}
@@ -40,6 +52,7 @@ const NativeVideoAvatar: React.FC<{ size: number }> = ({ size }) => {
           width: size,
           height: size,
           borderRadius: size / 2,
+          opacity: playing ? 1 : 0,
         }}
         contentFit="cover"
         nativeControls={false}
@@ -62,6 +75,8 @@ export const MascotAvatar: React.FC<MascotAvatarProps> = ({
   staticOnly = false,
 }) => {
   const [hasError, setHasError] = useState(false);
+  // Web: keep the video invisible until it actually plays (it renders black before the first frame)
+  const [videoPlaying, setVideoPlaying] = useState(false);
 
   const containerStyle = [
     styles.avatarContainer,
@@ -102,7 +117,10 @@ export const MascotAvatar: React.FC<MascotAvatarProps> = ({
           muted
           playsInline
           onError={() => setHasError(true)}
+          onPlaying={() => setVideoPlaying(true)}
           style={{
+            opacity: videoPlaying ? 1 : 0,
+            transition: 'opacity 300ms',
             width: size,
             height: size,
             borderRadius: '50%',
@@ -120,7 +138,7 @@ export const MascotAvatar: React.FC<MascotAvatarProps> = ({
 
 const styles = StyleSheet.create({
   avatarContainer: {
-    backgroundColor: '#F3F4F6',
+    backgroundColor: Colors.museCream,
     overflow: 'hidden',
     alignItems: 'center',
     justifyContent: 'center',

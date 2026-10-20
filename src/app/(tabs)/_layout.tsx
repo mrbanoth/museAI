@@ -14,8 +14,8 @@
  */
 
 import React, { useState } from 'react';
-import { View, StyleSheet, Platform, Share } from 'react-native';
-import { Tabs, useRouter } from 'expo-router';
+import { View, StyleSheet, Platform, Share, useWindowDimensions } from 'react-native';
+import { Tabs, useRouter, usePathname } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { HugeiconsIcon } from '@hugeicons/react-native';
 import {
@@ -31,11 +31,40 @@ import {
   SidebarDrawer,
   SettingsMenuModal,
   EditAgentModal,
+  DesktopSidebar,
+  type DesktopRoute,
 } from '@/components/common';
+
+/** Width at which the app switches to the web-portal layout (persistent sidebar) */
+const WIDE_BREAKPOINT = 900;
 import { showToast } from '@/context/ToastContext';
 
 export default function TabLayout() {
   const router = useRouter();
+  const pathname = usePathname();
+  const { width } = useWindowDimensions();
+  const isWide = width >= WIDE_BREAKPOINT;
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const activeRoute = (pathname.split('/').filter(Boolean).pop() || 'chat') as string;
+
+  const goTo = (route: DesktopRoute) => router.navigate(`/(tabs)/${route}` as any);
+
+  const selectChat = async (sessionId: string) => {
+    const { StorageService } = await import('@/services/storage');
+    await StorageService.setActiveSessionId(sessionId);
+    setActiveSessionId(sessionId);
+    setIsSidebarOpen(false);
+    goTo('chat');
+  };
+
+  const startNewChat = async () => {
+    const { StorageService } = await import('@/services/storage');
+    const newSession = await StorageService.createSession();
+    setActiveSessionId(newSession.id);
+    setIsSidebarOpen(false);
+    showToast('Started new chat');
+    goTo('chat');
+  };
 
   // Agent mascot & profile state
   const [agentName, setAgentName] = useState('Muse');
@@ -72,25 +101,40 @@ export default function TabLayout() {
   }, [router]);
 
   return (
-    <SafeAreaView style={styles.safeArea} edges={['top', 'left', 'right']}>
+    <SafeAreaView style={[styles.safeArea, isWide && styles.safeAreaWide]} edges={['top', 'left', 'right']}>
+      {/* Web portal / tablet: persistent sidebar */}
+      {isWide ? (
+        <DesktopSidebar
+          activeRoute={activeRoute}
+          activeSessionId={activeSessionId}
+          collapsed={sidebarCollapsed}
+          agentName={agentName}
+          onNavigate={goTo}
+          onSelectChat={selectChat}
+          onNewChat={startNewChat}
+        />
+      ) : null}
+
+      <View style={styles.main}>
       {/* 1. Persistent App Header */}
       <AppHeader
         agentName={agentName}
         mascotIcon={mascotIcon}
         mascotColor={mascotColor}
-        onOpenSidebar={() => setIsSidebarOpen(true)}
+        onOpenSidebar={() => (isWide ? setSidebarCollapsed((c) => !c) : setIsSidebarOpen(true))}
         onOpenSettings={() => setIsSettingsMenuOpen(true)}
         onMascotPress={() => setIsEditAgentOpen(true)}
       />
 
       {/* 2. Expo Router Tabs Viewport */}
-      <View style={styles.contentContainer}>
+      <View style={[styles.contentContainer, isWide && styles.contentWide]}>
         <Tabs
           screenOptions={{
             headerShown: false,
             tabBarShowLabel: false,
             tabBarHideOnKeyboard: true,
-            tabBarStyle: styles.tabBar,
+            // The sidebar replaces the bottom tab bar on wide screens
+            tabBarStyle: isWide ? { display: 'none' } : styles.tabBar,
             tabBarItemStyle: styles.tabBarItem,
           }}>
           <Tabs.Screen
@@ -164,6 +208,13 @@ export default function TabLayout() {
             }}
           />
           <Tabs.Screen
+            name="library"
+            options={{
+              href: null,
+              title: 'Library',
+            }}
+          />
+          <Tabs.Screen
             name="settings"
             options={{
               title: 'Settings',
@@ -182,27 +233,16 @@ export default function TabLayout() {
         </Tabs>
       </View>
 
-      {/* 3. Left Sliding Sidebar Drawer */}
+      </View>
+
+      {/* 3. Left Sliding Sidebar Drawer (phones) */}
       <SidebarDrawer
         visible={isSidebarOpen}
         activeChatId={activeSessionId}
         agentName={agentName}
         onClose={() => setIsSidebarOpen(false)}
-        onSelectChat={async (sessionId) => {
-          const { StorageService } = await import('@/services/storage');
-          await StorageService.setActiveSessionId(sessionId);
-          setActiveSessionId(sessionId);
-          setIsSidebarOpen(false);
-          router.replace('/(tabs)/chat' as any);
-        }}
-        onNewChat={async () => {
-          const { StorageService } = await import('@/services/storage');
-          const newSession = await StorageService.createSession();
-          setActiveSessionId(newSession.id);
-          setIsSidebarOpen(false);
-          showToast('Started new chat');
-          router.replace('/(tabs)/chat' as any);
-        }}
+        onSelectChat={selectChat}
+        onNewChat={startNewChat}
         onOpenSettings={() => {
           setIsSidebarOpen(false);
           router.replace('/(tabs)/settings' as any);
@@ -288,6 +328,18 @@ const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
     backgroundColor: Colors.white,
+  },
+  safeAreaWide: {
+    flexDirection: 'row',
+  },
+  main: {
+    flex: 1,
+  },
+  contentWide: {
+    width: '100%',
+    maxWidth: 880,
+    alignSelf: 'center',
+    backgroundColor: 'transparent',
   },
   contentContainer: {
     flex: 1,
