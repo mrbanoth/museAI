@@ -522,6 +522,7 @@ export async function processAgentChat(
     const reply = await runBasic(userMessage, actions, turnId);
     return { reply, actions, engine: 'basic' };
   } finally {
+    emitEvent('agent.done', {}, turnId);
     const key = `${currentUser()}:${turnId}`;
     const session = browserSessions.get(key);
     browserSessions.delete(key);

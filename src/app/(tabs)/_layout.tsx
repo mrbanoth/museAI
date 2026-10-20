@@ -38,6 +38,7 @@ import {
 /** Width at which the app switches to the web-portal layout (persistent sidebar) */
 const WIDE_BREAKPOINT = 900;
 import { showToast } from '@/context/ToastContext';
+import { subscribeEvents } from '@/services/api';
 
 export default function TabLayout() {
   const router = useRouter();
@@ -45,6 +46,26 @@ export default function TabLayout() {
   const { width } = useWindowDimensions();
   const isWide = width >= WIDE_BREAKPOINT;
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  // What Muse is doing right now, shown under its name in the header (like "Booking reservation…")
+  const [agentStatus, setAgentStatus] = useState<string | undefined>(undefined);
+
+  React.useEffect(() => {
+    let clearTimer: ReturnType<typeof setTimeout> | undefined;
+    const unsubscribe = subscribeEvents((event) => {
+      if (event.type === 'agent.step' && event.data?.text) {
+        setAgentStatus(String(event.data.text).replace(/\.{3}$|…$/, '') + '…');
+        if (clearTimer) clearTimeout(clearTimer);
+        // Steps arrive every few seconds while working; fall back to idle after a quiet spell
+        clearTimer = setTimeout(() => setAgentStatus(undefined), 12000);
+      } else if (event.type === 'agent.done' || event.type === 'task.run.finished') {
+        setAgentStatus(undefined);
+      }
+    });
+    return () => {
+      unsubscribe();
+      if (clearTimer) clearTimeout(clearTimer);
+    };
+  }, []);
   const activeRoute = (pathname.split('/').filter(Boolean).pop() || 'chat') as string;
 
   const goTo = (route: DesktopRoute) => router.navigate(`/(tabs)/${route}` as any);
@@ -119,6 +140,7 @@ export default function TabLayout() {
       {/* 1. Persistent App Header */}
       <AppHeader
         agentName={agentName}
+        statusSubtitle={agentStatus}
         mascotIcon={mascotIcon}
         mascotColor={mascotColor}
         onOpenSidebar={() => (isWide ? setSidebarCollapsed((c) => !c) : setIsSidebarOpen(true))}
@@ -238,21 +260,13 @@ export default function TabLayout() {
       {/* 3. Left Sliding Sidebar Drawer (phones) */}
       <SidebarDrawer
         visible={isSidebarOpen}
+        activeRoute={activeRoute}
         activeChatId={activeSessionId}
         agentName={agentName}
         onClose={() => setIsSidebarOpen(false)}
+        onNavigate={goTo}
         onSelectChat={selectChat}
         onNewChat={startNewChat}
-        onOpenSettings={() => {
-          setIsSidebarOpen(false);
-          router.replace('/(tabs)/settings' as any);
-        }}
-        onClearSideChats={async () => {
-          const { StorageService } = await import('@/services/storage');
-          await StorageService.clearAllSessions();
-          setActiveSessionId('main-chat');
-          showToast('Side chats cleared');
-        }}
       />
 
       {/* 4. Right 3-Dots Action Sheet */}

@@ -1,31 +1,24 @@
 /**
  * Ideas Tab Screen ('/(tabs)/ideas')
  *
- * Inspiration feed with vector brand & action icons (no emojis).
- * 1-Tap execution launches multi-step cloud research and publishes to Feed.
+ * Clean list of things Muse can do right now (matches the reference design):
+ * - Tap a row: start a chat that sends the idea's prompt
+ * - Run (▶): run it in the background and post the result to the Feed
  */
 
 import React, { useState, useEffect } from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  ScrollView,
-  TouchableOpacity,
-  ActivityIndicator,
-} from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator } from 'react-native';
 import { useRouter } from 'expo-router';
 import { HugeiconsIcon } from '@hugeicons/react-native';
 import {
   PlayIcon,
-  Comment01Icon,
-  Globe02Icon,
   Airplane01Icon,
   ShoppingBag01Icon,
-  Activity01Icon,
+  News01Icon,
   Calendar01Icon,
-  Moon02Icon,
+  Mail01Icon,
   SparklesIcon,
+  CheckmarkCircle01Icon,
 } from '@hugeicons/core-free-icons';
 import { Colors } from '@/constants/colors';
 import { IDEA_ITEMS } from '@/constants/dummyData';
@@ -34,19 +27,19 @@ import { showToast } from '@/context/ToastContext';
 import { ApiService, newRequestId, subscribeEvents } from '@/services/api';
 import { StorageService } from '@/services/storage';
 
-const IDEA_ICONS: Record<string, any> = {
-  'idea-1': Airplane01Icon,
-  'idea-2': ShoppingBag01Icon,
-  'idea-3': Activity01Icon,
-  'idea-4': Calendar01Icon,
-  'idea-5': Moon02Icon,
+const IDEA_STYLE: Record<string, { icon: any; color: string; bg: string }> = {
+  'idea-1': { icon: Airplane01Icon, color: Colors.primary, bg: Colors.tileBlue },
+  'idea-2': { icon: ShoppingBag01Icon, color: Colors.error, bg: Colors.tilePeach },
+  'idea-3': { icon: News01Icon, color: Colors.warning, bg: Colors.tileAmber },
+  'idea-4': { icon: Calendar01Icon, color: Colors.success, bg: Colors.tileGreen },
+  'idea-5': { icon: Mail01Icon, color: Colors.violet, bg: Colors.tileViolet },
 };
 
 export default function IdeasScreen() {
   const router = useRouter();
   const [runningIdeaId, setRunningIdeaId] = useState<string | null>(null);
   const [liveStep, setLiveStep] = useState<{ requestId: string; text: string } | null>(null);
-  const [lastResults, setLastResults] = useState<{ [id: string]: { replayUrl?: string; message?: string } }>({});
+  const [doneIds, setDoneIds] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     return subscribeEvents((event) => {
@@ -58,28 +51,23 @@ export default function IdeasScreen() {
 
   const handleRunIdea = async (item: IdeaItem) => {
     if (runningIdeaId) return;
-
     const requestId = newRequestId();
     setRunningIdeaId(item.id);
-    setLiveStep({ requestId, text: 'Starting agent...' });
-
+    setLiveStep({ requestId, text: 'Starting…' });
     try {
-      const res = await ApiService.runIdea(item, requestId);
-      showToast('Completed! Added to Feed.');
-      setLastResults((prev) => ({
-        ...prev,
-        [item.id]: { replayUrl: res.replayUrl, message: res.message },
-      }));
+      await ApiService.runIdea(item, requestId);
+      setDoneIds((prev) => new Set(prev).add(item.id));
+      showToast('Done — result posted to your Feed');
     } catch (e: any) {
-      showToast(e.message || 'Execution error');
+      showToast(e.message || 'Could not run this idea');
     } finally {
       setRunningIdeaId(null);
       setLiveStep(null);
     }
   };
 
-  const handleDiscussInChat = async (item: IdeaItem) => {
-    // New chat that immediately sends the idea's prompt to the agent
+  // New chat that immediately sends the idea's prompt to the agent
+  const handleOpenInChat = async (item: IdeaItem) => {
     const session = await StorageService.createSession(item.title);
     await StorageService.setActiveSessionId(session.id);
     await StorageService.setPendingPrompt(item.prompt);
@@ -88,87 +76,54 @@ export default function IdeasScreen() {
 
   return (
     <View style={styles.container}>
-      <ScrollView
-        style={styles.scrollArea}
-        contentContainerStyle={styles.scrollContent}
-        showsVerticalScrollIndicator={false}>
-        {/* Page Title & Subtitle */}
-        <View style={styles.titleWrapper}>
-          <Text style={styles.pageTitle}>Ideas & Workflows</Text>
-          <Text style={styles.subtitle}>
-            1-tap autonomous workflows executed in Browserbase cloud Chrome
-          </Text>
-        </View>
+      <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+        <Text style={styles.pageTitle}>Ideas</Text>
 
-        {/* Ideas List */}
         {IDEA_ITEMS.map((item, index) => {
+          const look = IDEA_STYLE[item.id] || { icon: SparklesIcon, color: Colors.primary, bg: Colors.tileBlue };
           const isRunning = runningIdeaId === item.id;
-          const result = lastResults[item.id];
-          const IconComponent = IDEA_ICONS[item.id] || SparklesIcon;
-
+          const isDone = doneIds.has(item.id);
           return (
-            <View key={item.id} style={styles.cardContainer}>
-              <View style={styles.ideaCard}>
-                {/* Header row: Vector Icon & Title */}
-                <View style={styles.cardHeader}>
-                  <View style={styles.iconContainer}>
-                    <HugeiconsIcon icon={IconComponent} size={20} color={Colors.primary} strokeWidth={2.2} />
-                  </View>
-                  <View style={styles.headerTextWrapper}>
-                    <Text style={styles.ideaTitle}>{item.title}</Text>
-                  </View>
+            <View key={item.id}>
+              <TouchableOpacity style={styles.row} onPress={() => handleOpenInChat(item)} activeOpacity={0.6}>
+                <View style={[styles.iconTile, { backgroundColor: look.bg }]}>
+                  <HugeiconsIcon icon={look.icon} size={22} color={look.color} strokeWidth={2} />
                 </View>
-
-                {/* Description */}
-                <Text style={styles.ideaDescription}>{item.description}</Text>
-
-                {/* Replay badge if finished */}
-                {result && (
-                  <TouchableOpacity
-                    style={styles.replayBadge}
-                    onPress={() => router.push('/(tabs)/feed' as any)}
-                    activeOpacity={0.7}>
-                    <HugeiconsIcon icon={Globe02Icon} size={13} color={Colors.primary} strokeWidth={2} />
-                    <Text style={styles.replayBadgeText}>View result in Feed</Text>
-                  </TouchableOpacity>
-                )}
-
-                {/* Action Buttons */}
-                <View style={styles.actionsRow}>
-                  <TouchableOpacity
-                    style={[styles.runBtn, isRunning && styles.runningBtn]}
-                    onPress={() => handleRunIdea(item)}
-                    disabled={isRunning}
-                    activeOpacity={0.8}>
-                    {isRunning ? (
-                      <>
-                        <ActivityIndicator size="small" color={Colors.white} />
-                        <Text style={styles.runBtnText} numberOfLines={1}>
-                          {liveStep?.text || 'Agent working...'}
-                        </Text>
-                      </>
-                    ) : (
-                      <>
-                        <HugeiconsIcon icon={PlayIcon} size={13} color={Colors.white} strokeWidth={2.4} />
-                        <Text style={styles.runBtnText}>Run Workflow</Text>
-                      </>
-                    )}
-                  </TouchableOpacity>
-
-                  <TouchableOpacity
-                    style={styles.chatBtn}
-                    onPress={() => handleDiscussInChat(item)}
-                    activeOpacity={0.7}>
-                    <HugeiconsIcon icon={Comment01Icon} size={15} color={Colors.iconDark} strokeWidth={2} />
-                    <Text style={styles.chatBtnText}>Chat</Text>
-                  </TouchableOpacity>
+                <View style={styles.textCol}>
+                  <Text style={styles.ideaTitle}>{item.title}</Text>
+                  <Text style={styles.ideaDescription} numberOfLines={isRunning ? 1 : 3}>
+                    {isRunning ? liveStep?.text || 'Working…' : item.description}
+                  </Text>
+                  {isDone && !isRunning ? (
+                    <TouchableOpacity onPress={() => router.push('/(tabs)/feed' as any)} hitSlop={8}>
+                      <Text style={styles.doneLink}>View result in Feed ›</Text>
+                    </TouchableOpacity>
+                  ) : null}
                 </View>
-              </View>
-
-              {index < IDEA_ITEMS.length - 1 && <View style={styles.divider} />}
+                <TouchableOpacity
+                  style={[styles.runBtn, isDone && styles.runBtnDone]}
+                  onPress={() => handleRunIdea(item)}
+                  disabled={!!runningIdeaId}
+                  hitSlop={8}
+                  accessibilityLabel={`Run ${item.title} in the background`}>
+                  {isRunning ? (
+                    <ActivityIndicator size="small" color={Colors.primary} />
+                  ) : (
+                    <HugeiconsIcon
+                      icon={isDone ? CheckmarkCircle01Icon : PlayIcon}
+                      size={16}
+                      color={isDone ? Colors.success : Colors.iconDark}
+                      strokeWidth={2.2}
+                    />
+                  )}
+                </TouchableOpacity>
+              </TouchableOpacity>
+              {index < IDEA_ITEMS.length - 1 ? <View style={styles.divider} /> : null}
             </View>
           );
         })}
+
+        <Text style={styles.footnote}>Tap an idea to do it together in chat, or ▶ to let Muse run it in the background.</Text>
       </ScrollView>
     </View>
   );
@@ -179,125 +134,71 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: Colors.white,
   },
-  scrollArea: {
-    flex: 1,
-  },
   scrollContent: {
     paddingHorizontal: 20,
-    paddingTop: 12,
+    paddingTop: 8,
     paddingBottom: 40,
   },
-  titleWrapper: {
-    marginBottom: 20,
-  },
   pageTitle: {
-    fontSize: 26,
-    fontWeight: '800',
+    fontSize: 22,
+    fontWeight: '700',
     color: Colors.iconDark,
-    letterSpacing: -0.5,
+    marginBottom: 8,
   },
-  subtitle: {
-    fontSize: 13,
-    color: Colors.textSecondary,
-    marginTop: 2,
-    lineHeight: 18,
-  },
-  cardContainer: {
-    marginBottom: 6,
-  },
-  ideaCard: {
-    backgroundColor: '#F8FAFC',
-    borderRadius: 20,
-    padding: 18,
-    borderWidth: 1,
-    borderColor: '#F1F5F9',
-  },
-  cardHeader: {
+  row: {
     flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 10,
-    gap: 12,
+    alignItems: 'flex-start',
+    gap: 14,
+    paddingVertical: 16,
   },
-  iconContainer: {
-    width: 40,
-    height: 40,
-    borderRadius: 12,
-    backgroundColor: '#EFF6FF',
+  iconTile: {
+    width: 44,
+    height: 44,
+    borderRadius: 14,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  headerTextWrapper: {
+  textCol: {
     flex: 1,
   },
   ideaTitle: {
-    fontSize: 15,
+    fontSize: 16,
     fontWeight: '700',
     color: Colors.iconDark,
-    lineHeight: 20,
+    marginBottom: 4,
   },
   ideaDescription: {
-    fontSize: 13.5,
+    fontSize: 14,
+    lineHeight: 20,
     color: Colors.textSecondary,
-    lineHeight: 19,
-    marginBottom: 14,
   },
-  replayBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    backgroundColor: '#EFF6FF',
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 10,
-    alignSelf: 'flex-start',
-    marginBottom: 14,
-  },
-  replayBadgeText: {
-    fontSize: 12,
+  doneLink: {
+    marginTop: 6,
+    fontSize: 13,
     fontWeight: '600',
     color: Colors.primary,
   },
-  actionsRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-  },
   runBtn: {
-    flex: 1,
-    flexDirection: 'row',
+    width: 36,
+    height: 36,
+    borderRadius: 18,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: Colors.primary,
-    borderRadius: 14,
-    height: 42,
-    gap: 8,
+    backgroundColor: Colors.surfaceMuted,
+    marginTop: 4,
   },
-  runningBtn: {
-    backgroundColor: '#3B82F6',
-  },
-  runBtnText: {
-    color: Colors.white,
-    fontSize: 13,
-    fontWeight: '700',
-  },
-  chatBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#FFFFFF',
-    borderRadius: 14,
-    height: 42,
-    paddingHorizontal: 18,
-    gap: 6,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-  },
-  chatBtnText: {
-    color: Colors.iconDark,
-    fontSize: 13,
-    fontWeight: '700',
+  runBtnDone: {
+    backgroundColor: Colors.successLight,
   },
   divider: {
-    height: 8,
+    height: 1,
+    backgroundColor: Colors.borderLight,
+    marginLeft: 58,
+  },
+  footnote: {
+    marginTop: 20,
+    fontSize: 12,
+    color: Colors.iconMuted,
+    textAlign: 'center',
   },
 });

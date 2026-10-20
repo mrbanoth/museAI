@@ -9,6 +9,14 @@ export const Colors = {
   museCream: '#FDF3EA',
   museCreamDeep: '#F6E4D8',
 
+  // Soft icon tiles (Ideas list, connectors)
+  tileBlue: '#E3EDFF',
+  tilePeach: '#FDE8DE',
+  tileGreen: '#DDF5E9',
+  tileViolet: '#EEE7FF',
+  tileAmber: '#FFF1D9',
+  violet: '#7C3AED',
+
   // Brand Primary (Blue)
   primary: '#2563EB',        // Main brand blue
   primaryDark: '#1D4ED8',    // Pressed/Hover state

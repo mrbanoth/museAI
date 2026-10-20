@@ -39,6 +39,8 @@ const NAV: Array<{ route: DesktopRoute; label: string; icon: any }> = [
 ];
 
 interface DesktopSidebarProps {
+  /** 'panel' = floating card beside the content (web), 'drawer' = fills the phone slide-in drawer */
+  variant?: 'panel' | 'drawer';
   activeRoute: string;
   activeSessionId: string;
   collapsed: boolean;
@@ -49,6 +51,7 @@ interface DesktopSidebarProps {
 }
 
 export const DesktopSidebar: React.FC<DesktopSidebarProps> = ({
+  variant = 'panel',
   activeRoute,
   activeSessionId,
   collapsed,
@@ -127,7 +130,7 @@ export const DesktopSidebar: React.FC<DesktopSidebarProps> = ({
   }
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, variant === 'drawer' && styles.drawer]}>
       {/* Title + Invite */}
       <View style={styles.titleRow}>
         <Text style={styles.title} numberOfLines={1}>
@@ -234,6 +237,14 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.04,
     shadowRadius: 16,
     shadowOffset: { width: 0, height: 4 },
+  },
+  drawer: {
+    flex: 1,
+    width: '100%',
+    margin: 0,
+    borderRadius: 0,
+    borderWidth: 0,
+    shadowOpacity: 0,
   },
   rail: {
     width: 64,

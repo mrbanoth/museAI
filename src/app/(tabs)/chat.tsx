@@ -551,7 +551,7 @@ export default function ChatScreen() {
                   scrollViewRef.current?.scrollToEnd({ animated: true });
                 }, 100);
               }}
-              placeholder="Message Muse AI or type URL / goal..."
+              placeholder="Message"
               placeholderTextColor={Colors.iconMuted}
               returnKeyType="send"
               onSubmitEditing={() => handleSend()}

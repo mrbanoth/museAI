@@ -136,7 +136,7 @@ export interface AgentTask {
  */
 export interface MuseEvent {
   seq: number;
-  type: 'task.updated' | 'task.deleted' | 'task.run.started' | 'task.run.finished' | 'feed.added' | 'agent.step' | 'connector.updated';
+  type: 'task.updated' | 'task.deleted' | 'task.run.started' | 'task.run.finished' | 'feed.added' | 'agent.step' | 'connector.updated' | 'agent.done';
   at: string;
   requestId?: string;
   data: any;
